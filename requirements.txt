@@ -1,0 +1,4 @@
+py-machineid
+fastapi
+uvicorn 
+websockets
