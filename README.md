@@ -22,7 +22,7 @@ See:
     agent_linear_prediction.py
     agent_tiny_bid.py
 
-For examples on how to create a agent.
+For examples on how to create an agent.
 NOTE: If playing on a non-local server the agent must set the host in the file.
 
 In general you must implement a make_bid() function that takes the following parameters:

@@ -2,3 +2,5 @@ py-machineid
 fastapi
 uvicorn 
 websockets
+scikit-learn
+numpy

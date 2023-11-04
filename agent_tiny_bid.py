@@ -1,5 +1,5 @@
 import random
-
+import os
 from ag_client import AuctionGameClient
 
 
@@ -27,15 +27,11 @@ def tiny_bid(agent_id:str, states:dict, auctions:dict, prev_auctions:dict):
 
 
 
-if __name__ == "__main__":    
-    agent_name = __file__[:-3] # get rid of .py (or write a awesome name here! )
-    if agent_name.startswith("./"):
-        agent_name = agent_name[2:]
-    agent_name = "{}_{}".format(agent_name, random.randint(1, 1000))
-    
+if __name__ == "__main__":
     
     host = "localhost"
-    game = AuctionGameClient(host, agent_name)    
+    agent_name = "{}_{}".format(os.path.basename(__file__), random.randint(1, 1000))
+    game = AuctionGameClient(host, agent_name) 
     try:
         game.run(tiny_bid)
     except KeyboardInterrupt:

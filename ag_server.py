@@ -286,7 +286,6 @@ async def websocket_endpoint_runner(websocket: WebSocket, token: str):
     finally:            
         await connection_manager.disconnect_all()
         game_manager.is_done = True
-        # os.kill(os.getpid(), signal.SIGTERM)
 
 
 @app.get("/")

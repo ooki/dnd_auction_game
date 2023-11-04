@@ -1,10 +1,9 @@
-import random
 import os
 import json
+import random
 
 import numpy as np
 from sklearn.linear_model import LinearRegression
-
 
 from ag_client import AuctionGameClient
 ############################################################################################
@@ -16,7 +15,6 @@ from ag_client import AuctionGameClient
 #       And predicts the winning bid
 #
 ############################################################################################
-    
 
 class AuctionPredictionModel:
     
@@ -98,19 +96,14 @@ class AuctionPredictionModel:
 
 
 if __name__ == "__main__":    
-    agent_name = __file__[:-3] # get rid of .py (or write a awesome name here! )
-    if agent_name.startswith("./"):
-        agent_name = agent_name[2:]
-    agent_name = "{}_{}".format(agent_name, random.randint(1, 1000))
-    
-    
     predict_model = AuctionPredictionModel()
     predict_model.load("./logs")
     predict_model.train()
     
-    
+
     host = "localhost"
-    game = AuctionGameClient(host, agent_name)    
+    agent_name = "{}_{}".format(os.path.basename(__file__), random.randint(1, 1000))
+    game = AuctionGameClient(host, agent_name)
     try:
         game.run(predict_model.make_bids)
     except KeyboardInterrupt:
