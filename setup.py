@@ -42,11 +42,11 @@ setup(
     python_requires=">=3.8",
     packages=['dnd_auction_game'],
     install_requires=[
-          'py-machineid>=0.4.*',
-          'fastapi >= 0.104.*',
+          'py-machineid>=0.4.5',
+          'fastapi',
           'uvicorn',
           'websockets',
-          'scikit-learn >= 1.3.*'
+          'scikit-learn'
       ],
 )
 
