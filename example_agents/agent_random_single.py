@@ -1,6 +1,6 @@
 import random
 
-from ag_client import AuctionGameClient
+from dnd_auction_game import AuctionGameClient
 
 
 ############################################################################################

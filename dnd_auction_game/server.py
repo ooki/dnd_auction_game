@@ -12,9 +12,7 @@ import websockets
 from fastapi import (
     FastAPI,
     WebSocket,
-    WebSocketException,
     WebSocketDisconnect,
-    status,
 )
 from fastapi.responses import HTMLResponse
 

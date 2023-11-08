@@ -1,7 +1,26 @@
-# auction-game
+# dnd-auction-game
 
+
+In this game, your goal is to score as many points as possible by participating in auctions. 
+
+Every fourth round, each player gets 1000 gold to use in these auctions. At the beginning of each round, you'll see a set number of auctions, and you need to submit your bids in the form of a dictionary (you can choose not to bid as well).  
+
+The server will reward the auctions to the highest bidders (there can be multiple winners if there's a tie), and the winning player will earn points based on a random dice roll.  
+
+If you don't win an auction, you'll get back 60% of the gold you bid. The exact number of points you receive from an auction is determined by rolling dice, so it's a bit unpredictable.  
+
+_Auctions_
+The auctions are presented in D&D form, for example: 3d6+5 means throw a 6 sided die 3 times and add 5, add it all up
+and thats the number of points given by the auction. In other words the exact amount of points given for an auction is
+stochastic. 
+
+
+
+# Installation
 To install, run:  
-pip install -r requirements.txt
+pip install dnd_auction_game
+
+
 
 # Flow
 A game is done in the following order:
@@ -13,16 +32,15 @@ A game is done in the following order:
 
 
 # Server 
-To run the server, use: 'uvicorn ag_server:app' in the directory root directory.  
+To run the server, use: 'uvicorn dnd_auction_game.server:app' in the directory root directory.  
 Ctrl+C to stop it cleanly.
 
 # Agents (players)
-See:
+See the folder example_agents (on github) for examples on how to create a agent.
     agent_linear_prediction.py
     agent_linear_prediction.py
     agent_tiny_bid.py
 
-For examples on how to create a agent.
 NOTE: If playing on a non-local server the agent must set the host in the file.
 
 In general you must implement a make_bid() function that takes the following parameters:
@@ -46,11 +64,11 @@ that gives a list of the bids for this particular auction, sorted so that the wi
 
 
 # Play the Game
-Run python ./play_game.py  
+Run 'python -m dnd_auction_game.play' 
 This will run the game for 12 rounds.
 
-Use python ./play_game.py  XX  
-to play for XX rounds.
+Use python 'python -m dnd_auction_game.play XX'
+to play for XX rounds. Example: 'python -m dnd_auction_game.play 42' will play the game for 42 rounds.
 
 Remember: connect all agents BEFORE running play_game.py, the server does not need to be restarted.
 

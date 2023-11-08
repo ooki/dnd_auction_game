@@ -34,7 +34,7 @@ class AuctionGameClient:
             os.makedirs("logs")
         
         n_id = len(os.listdir("logs"))
-        self.log_file = os.path.join("logs", "{}_{}.jsonl".format(self.agent_id, n_id))
+        self.log_file = os.path.join("logs", "agent_{}_n{}.jsonl".format(self.agent_id, n_id))
         
         print("logging to file: '{}'".format(self.log_file))
 
@@ -63,6 +63,7 @@ class AuctionGameClient:
                     round_data_raw = await sock.recv()   
                     round_data = json.loads(round_data_raw)
                     
+                    round_data["current_agent"] = self.agent_id
                     with open(self.log_file, "a+") as fp:
                         fp.write("{}\n".format(json.dumps(round_data)))
                     

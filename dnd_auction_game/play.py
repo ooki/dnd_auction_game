@@ -44,6 +44,8 @@ if __name__ == "__main__":
         n_rounds = int(sys.argv[1])
         
     runner = AuctionGameRunner(host, n_rounds=n_rounds)
+    print("Running the game for: {} rounds.".format(n_rounds))
+    print("Ctrl+C to stop cleanly")
     
     try:
         runner.run()

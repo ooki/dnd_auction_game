@@ -6,7 +6,7 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 
 
-from ag_client import AuctionGameClient
+from dnd_auction_game import AuctionGameClient
 ############################################################################################
 #
 #
@@ -21,7 +21,7 @@ from ag_client import AuctionGameClient
 class AuctionPredictionModel:
     
     def __init__(self):
-        self.average_roll_for_die = {
+        self.average_roll_for_die = {  # there is a more math'y way to do this. Left as an exerecise for the reader :)
             2: 1.5,
             3: 2.0,
             4: 2.5,
