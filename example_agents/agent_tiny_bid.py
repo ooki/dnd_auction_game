@@ -1,4 +1,5 @@
 import random
+import os
 
 from dnd_auction_game import AuctionGameClient
 
