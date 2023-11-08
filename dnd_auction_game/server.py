@@ -193,10 +193,10 @@ class AuctionHouse:
             return
                 
         if self.agents[a_id]["gold"] < gold:
-            return
-        
+            gold = self.agents[a_id]["gold"]
+
         self.current_bids[auction_id].append( (a_id, gold) )
-        self.agents[a_id]["gold"] -= gold        
+        self.agents[a_id]["gold"] -= gold
     
     def process_all_bids(self):        
         
