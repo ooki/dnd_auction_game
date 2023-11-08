@@ -1,6 +1,11 @@
 import random
+<<<<<<< HEAD:example_agents/agent_random_single.py
 
 from dnd_auction_game import AuctionGameClient
+=======
+import os 
+from ag_client import AuctionGameClient
+>>>>>>> 4ccc04224a7800ee74a3b9d16d4db1c77e18b1d9:agent_random_single.py
 
 
 ############################################################################################
@@ -25,7 +30,7 @@ def random_single_bid(agent_id:str, states:dict, auctions:dict, prev_auctions:di
         
     bids = {}
     if agent_state["gold"] > 0:                
-        target_auction_id = random.sample(auctions.keys(), k=1)[0] # sample returns a list
+        target_auction_id = random.sample((auctions.keys()), k=1)[0] # sample returns a list
         
         bid_amount = int(agent_state["gold"] * random.uniform(0.5, 0.9))        
         bid_amount = min(bid_amount, max_gold)  # never more than the other agents have
@@ -37,14 +42,11 @@ def random_single_bid(agent_id:str, states:dict, auctions:dict, prev_auctions:di
 
 
 if __name__ == "__main__":    
-    agent_name = __file__[:-3] # get rid of .py (or write a awesome name here! )
-    if agent_name.startswith("./"):
-        agent_name = agent_name[2:]
-    agent_name = "{}_{}".format(agent_name, random.randint(1, 1000))
-    
-    
+
     host = "localhost"
-    game = AuctionGameClient(host, agent_name)    
+    agent_name = "{}_{}".format(os.path.basename(__file__), random.randint(1, 1000))
+    
+    game = AuctionGameClient(host, agent_name) 
     try:
         game.run(random_single_bid)
     except KeyboardInterrupt:
