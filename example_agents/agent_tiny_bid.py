@@ -1,11 +1,6 @@
 import random
-<<<<<<< HEAD:example_agents/agent_tiny_bid.py
 
 from dnd_auction_game import AuctionGameClient
-=======
-import os
-from ag_client import AuctionGameClient
->>>>>>> 4ccc04224a7800ee74a3b9d16d4db1c77e18b1d9:agent_tiny_bid.py
 
 
 ############################################################################################

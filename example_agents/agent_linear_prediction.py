@@ -5,12 +5,8 @@ import random
 import numpy as np
 from sklearn.linear_model import LinearRegression
 
-<<<<<<< HEAD:example_agents/agent_linear_prediction.py
-
 from dnd_auction_game import AuctionGameClient
-=======
-from ag_client import AuctionGameClient
->>>>>>> 4ccc04224a7800ee74a3b9d16d4db1c77e18b1d9:agent_linear_prediction.py
+
 ############################################################################################
 #
 #
