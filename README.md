@@ -37,14 +37,16 @@ Ctrl+C to stop it cleanly.
 
 # Agents (players)
 See the folder example_agents (on github) for examples on how to create a agent.
+    agent_print_info.py
     agent_linear_prediction.py
     agent_linear_prediction.py
     agent_tiny_bid.py
 
 
+
 NOTE: If playing on a non-local server the agent must set the host in the file.
 
-In general you must implement a make_bid() function that takes the following parameters:
+In general you must implement a make_bid() function that takes the following parameters (see agent_print_info.py for how to parse this info):
 
 * @agent_id:str - a string that is the agent id of the current agent.
 

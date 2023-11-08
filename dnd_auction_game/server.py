@@ -235,6 +235,9 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
         
     except WebSocketDisconnect:        
         return
+    
+    except:
+        return
         
     
     try:        
@@ -249,6 +252,12 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
                 game_manager.register_bid(a_id, auction_id, gold)                
             
     except WebSocketDisconnect:        
+        print("agent: {} disconnected.".format(agent_info["a_id"]))
+        connection_manager.disconnect(websocket)
+        return
+    
+    except:
+        print("agent: {} was disconnected due to error.".format(agent_info["a_id"]))
         connection_manager.disconnect(websocket)
         return
     
