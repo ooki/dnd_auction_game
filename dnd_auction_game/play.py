@@ -22,15 +22,27 @@ class AuctionGameRunner:
         connection_str = "ws://{}:{}/ws_run/{}".format(self.host, self.port, self.token)
         print("connecting to: {}".format(connection_str))
         
-        async with websockets.connect(connection_str) as sock:
-            print("<connected - starting game>")
-            
-            for i in range(self.n_rounds):
-                print("start round:", i)
-                d = {"start_round": i}
-                await sock.send(json.dumps(d))            
-                await asyncio.sleep(self.time_per_round)
-            
+        round_k = 0
+
+        while True:
+            try:
+                async with websockets.connect(connection_str) as sock:
+                    print("<connected - starting game>")
+                    
+                    for i in range(round_k, self.n_rounds):
+                        print("start round:", i)
+                        d = {"start_round": i, "done": 0}
+                        await sock.send(json.dumps(d))            
+                        await asyncio.sleep(self.time_per_round)
+
+                        round_k = i
+                    
+                    d = {"start_round": i, "done": 1}
+                    await sock.send(json.dumps(d))
+                    break
+            except:
+                continue
+
         print("<done>")
             
         

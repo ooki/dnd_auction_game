@@ -19,7 +19,7 @@ from fastapi.responses import HTMLResponse
 app = FastAPI()
 
 
-def generate_leadboard(leadboard, is_done):
+def generate_leadboard(leadboard, round, is_done):
 
     do_refresh = """<meta http-equiv="refresh" content="1">"""
     if is_done:
@@ -36,6 +36,9 @@ def generate_leadboard(leadboard, is_done):
     h = ""
     if is_done:
         h = " - FINISHED GAME"
+    else:
+        h = "Round: {}".format(round)
+        
     html_body_top = """
     <body>
         <h2>Leadboard {}</h2>        
@@ -280,6 +283,7 @@ async def websocket_endpoint_runner(websocket: WebSocket, token: str):
         return
     
     if game_manager.is_done:
+        print("starting new game")
         game_manager.reset()
         
     
@@ -293,14 +297,22 @@ async def websocket_endpoint_runner(websocket: WebSocket, token: str):
                                             
             round_data = game_manager.prepare_auction()            
             await connection_manager.broadcast(round_data)
+
+            if round_info["done"] == 1:
+                print("play is done.")
+                game_manager.is_active = False
+                game_manager.is_done = True
+                break
+
             
     except WebSocketDisconnect:
         game_manager.is_active = True
         print("<game done after {} rounds>".format(game_manager.round_counter))
     
-    finally:            
-        await connection_manager.disconnect_all()
-        game_manager.is_done = True
+    finally:     
+        if game_manager.is_done == True:
+            await connection_manager.disconnect_all()
+            game_manager.is_done = True
 
 
 @app.get("/")
@@ -311,5 +323,5 @@ async def get():
         leadboard.append((name, info["points"], info["gold"]))
         
     leadboard.sort(key=lambda x:x[1], reverse=True)    
-    return HTMLResponse(generate_leadboard(leadboard, game_manager.is_done))
+    return HTMLResponse(generate_leadboard(leadboard, game_manager.round_counter ,game_manager.is_done))
 
