@@ -6,11 +6,11 @@ import websockets
 
 
 class AuctionGameRunner:
-    def __init__(self, host:str, n_rounds=5, time_per_round:float=1.0, token:str="play123", port:int=8000):
+    def __init__(self, host:str, play_token:str, n_rounds=5, time_per_round:float=1.0, port:int=8000):
         self.host = host
         self.port = port
         self.n_rounds = n_rounds
-        self.token = token
+        self.token = play_token
         
         self.time_per_round = time_per_round
         
@@ -40,10 +40,15 @@ if __name__ == "__main__":
     host = "localhost"
     
     n_rounds = 12
-    if len(sys.argv) == 2:
+    if len(sys.argv) >= 2:
         n_rounds = int(sys.argv[1])
+
+    if len(sys.argv) >= 3:
+        play_token = sys.argv[2]
+    else:
+        play_token = "play123"
         
-    runner = AuctionGameRunner(host, n_rounds=n_rounds)
+    runner = AuctionGameRunner(host, n_rounds=n_rounds, play_token=play_token)
     print("Running the game for: {} rounds.".format(n_rounds))
     print("Ctrl+C to stop cleanly")
     

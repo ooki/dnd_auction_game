@@ -4,7 +4,7 @@ import math
 import asyncio
 from typing import List, Dict, Union
 from collections import defaultdict
-import signal
+import json
 
 
 import os
@@ -83,10 +83,12 @@ class ConnectionManager:
 
 
 class AuctionHouse:
-    def __init__(self, game_token:str):
+    def __init__(self, game_token:str, play_token:str, save_logs=False):
         self.is_done = False
         
         self.game_token = game_token
+        self.play_token = play_token
+        self.save_logs = save_logs
         self.gold_income = 1000
         
         self.agents = {}
@@ -105,7 +107,7 @@ class AuctionHouse:
         self.auction_counter = 1
         self.current_auctions = {}
         self.current_rolls = {} 
-        self.current_bids = defaultdict(list)
+        self.current_bids = defaultdict(list)        
         
     
     def reset(self):
@@ -153,6 +155,10 @@ class AuctionHouse:
             "auctions": self.current_auctions,
             "prev_auctions": out_prev_state
         }
+
+        if self.save_logs:
+            with open("./auction_house_log.jsonln", "a") as fp:
+                fp.write("{}\n".format(json.dumps(state)))
         
         self.round_counter += 1
         return state
@@ -213,7 +219,10 @@ class AuctionHouse:
             
         
         
-game_manager = AuctionHouse(game_token="play123")
+game_token = os.environ.get("AH_GAME_TOKEN", "play123")
+play_token = os.environ.get("AH_PLAY_TOKEN", "play123")
+
+game_manager = AuctionHouse(game_token=game_token, play_token=play_token, save_logs=True)
 connection_manager = ConnectionManager()
 
 @app.websocket("/ws/{token}")
@@ -267,9 +276,8 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
 @app.websocket("/ws_run/{token}")
 async def websocket_endpoint_runner(websocket: WebSocket, token: str):
     
-    if token != game_manager.game_token:
+    if token != game_manager.play_token:
         return
-
     
     if game_manager.is_done:
         game_manager.reset()
