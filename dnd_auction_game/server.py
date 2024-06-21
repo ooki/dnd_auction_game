@@ -109,21 +109,22 @@ class AuctionHouse:
         self.agents = {}
         self.names = {}
         
-        self.give_out_gold_rounds = 4        
+        self.give_out_gold_rounds = 1       
         self.auctions_per_agent = 1.5
-        self.gold_back_fraction = 0.6   
+        self.gold_back_fraction = 0.6
         
-        self.die_sizes = [2, 3, 4, 6, 8, 10, 12, 20, 20]
-        self.die_prob = [8, 8, 9, 8, 6, 6, 5, 2, 1]
-        self.max_n_die = [5, 5, 5, 4, 3, 3, 2, 2, 2]
-        self.max_bonus = [10, 9, 8, 7, 6, 5, 5, 5, 3] 
+        self.die_sizes = [2,   3,  4,  6,   8, 10,  12,   20,  20]
+        self.die_prob =  [8,   8,  9,  8,   6,  6,   5,    2,   1]
+        self.max_n_die = [5,   4, 10,  2,   3,  3,   6,    2,   4]
+        self.max_bonus = [10,  2, 16,  8,  21,  2,   5,    7,   3] 
+        self.min_bonus = [-2, -5, -5, -5, -10, -4,  -5,  -2,  -1]
 
         self.round_counter = 0
         self.auction_counter = 1
         self.current_auctions = {}
         self.current_rolls = {} 
-        self.current_bids = defaultdict(list)        
-        
+        self.current_bids = defaultdict(list)
+
     
     def reset(self):
         self.is_done = False
@@ -137,6 +138,10 @@ class AuctionHouse:
         
     
     def add_agent(self, name:str, a_id:str):
+        if a_id in self.agents:
+            print("Agent {}  id:{} reconnected".format(name, a_id))
+            return
+        
         self.agents[a_id] = {"gold": 0, "points": 0}
         self.names[a_id] = name
     
@@ -191,7 +196,7 @@ class AuctionHouse:
             i = random.choices(indices, weights=self.die_prob, k=1)[0]            
             die = self.die_sizes[i]
             n_dices = random.randint(1, self.max_n_die[i])
-            bonus = random.randint(0, self.max_bonus[i])
+            bonus = random.randint(self.min_bonus[i], self.max_bonus[i])
                                     
             auction_id = "a{}".format(self.auction_counter)
             a = {"die": die, "num": n_dices, "bonus": bonus}
@@ -201,8 +206,7 @@ class AuctionHouse:
             points = sum( (random.randint(1, a["die"]) for _ in range(a["num"])) )
             points += a["bonus"]
             rolls[auction_id] = points
-            
-        
+                    
         return auctions, rolls
     
     def register_bid(self, a_id:str, auction_id:str, gold:int):        
