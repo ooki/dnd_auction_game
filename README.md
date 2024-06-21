@@ -3,7 +3,7 @@
 
 In this game, your goal is to score as many points as possible by participating in auctions. 
 
-Every fourth round, each player gets 1000 gold to use in these auctions. At the beginning of each round, you'll see a set number of auctions, and you need to submit your bids in the form of a dictionary (you can choose not to bid as well).  
+Every round, each player gets 1000 gold to use in these auctions. At the beginning of each round, you'll see a set number of auctions, and you need to submit your bids in the form of a dictionary (you can choose not to bid as well).  
 
 The server will reward the auctions to the highest bidders (there can be multiple winners if there's a tie), and the winning player will earn points based on a random dice roll.  
 
