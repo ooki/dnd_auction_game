@@ -5,6 +5,7 @@ import asyncio
 from typing import List, Dict, Union
 from collections import defaultdict
 import json
+from contextlib import asynccontextmanager
 
 
 import os
@@ -16,7 +17,18 @@ from fastapi import (
 )
 from fastapi.responses import HTMLResponse
 
-app = FastAPI()
+
+
+@asynccontextmanager
+async def start_server_loop(app: FastAPI):
+
+    asyncio.create_task(update_games_task())    
+    yield
+
+
+app = FastAPI(lifespan=start_server_loop)
+
+
 
 
 def generate_leadboard(leadboard, round, is_done):
@@ -325,3 +337,9 @@ async def get():
     leadboard.sort(key=lambda x:x[1], reverse=True)    
     return HTMLResponse(generate_leadboard(leadboard, game_manager.round_counter ,game_manager.is_done))
 
+
+
+async def update_games_task():
+    while True:        
+        await game_manager.update()        
+        await asyncio.sleep(0.1)
