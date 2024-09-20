@@ -2,5 +2,5 @@ py-machineid
 fastapi
 uvicorn 
 websockets
-scikit-learn
+Jinja2
 numpy
