@@ -10,9 +10,10 @@ from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
 
 
 class AuctionGameClient:
-    def __init__(self, host:str, agent_name:str,  token:str="play123", port:int=8000):
+    def __init__(self, host:str, agent_name:str, token:str="play123", player_id:str="<identifier>", port:int=8000):
         self.host = host
         self.port = port
+        self.player_id = player_id
 
         self.token = token
         self.agent_name = agent_name        
@@ -47,6 +48,7 @@ class AuctionGameClient:
         agent_info = {}
         agent_info["name"] = self.agent_name
         agent_info["a_id"] = self.agent_id
+        agent_info["player_id"] = self.player_id[0:128]
 
         connection_str = "ws://{}:{}/ws/{}".format(self.host, self.port, self.token)
         print("connecting to: {}".format(connection_str))
@@ -57,21 +59,20 @@ class AuctionGameClient:
                 agent_info_json = json.dumps(agent_info)
                 print(agent_info_json)
                 await sock.send(agent_info_json)
-                
-                
+                                
                 while True:
-                    round_data_raw = await sock.recv()   
+                    round_data_raw = await sock.recv()
                     round_data = json.loads(round_data_raw)
                     
                     round_data["current_agent"] = self.agent_id
-                    with open(self.log_file, "a+") as fp:
+                    with open(self.log_file, "a") as fp:
                         fp.write("{}\n".format(json.dumps(round_data)))
                     
                     new_bids = bid_callback(self.agent_id, round_data["states"], round_data["auctions"], round_data["prev_auctions"])                    
                     await sock.send(json.dumps(new_bids))
         
         except ConnectionClosedError:
-            print("<ERROR: Connection to server closed>")            
+            print("<ERROR: Connection to server closed>")
         
         except ConnectionClosedOK:
             pass

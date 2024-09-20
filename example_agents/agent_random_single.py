@@ -25,8 +25,10 @@ def random_single_bid(agent_id:str, states:dict, auctions:dict, prev_auctions:di
                     
         
     bids = {}
-    if agent_state["gold"] > 0:                
-        target_auction_id = random.sample((auctions.keys()), k=1)[0] # sample returns a list
+    if agent_state["gold"] > 0:           
+        # pick a random auction
+        actions = list(auctions.keys())     
+        target_auction_id = random.sample(actions, k=1)[0] # sample returns a list
         
         bid_amount = int(agent_state["gold"] * random.uniform(0.5, 0.9))        
         bid_amount = min(bid_amount, max_gold)  # never more than the other agents have
@@ -41,8 +43,13 @@ if __name__ == "__main__":
 
     host = "localhost"
     agent_name = "{}_{}".format(os.path.basename(__file__), random.randint(1, 1000))
-    
-    game = AuctionGameClient(host, agent_name) 
+    player_id = "id_of_human_player"
+    port = 8000
+
+    game = AuctionGameClient(host=host,
+                             agent_name=agent_name,
+                             player_id=player_id,
+                             port=port)
     try:
         game.run(random_single_bid)
     except KeyboardInterrupt:

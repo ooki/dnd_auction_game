@@ -6,7 +6,7 @@ this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
 
 
-__version__ = "0.1.5"
+__version__ = "0.2.0"
 
 setup(
     name="dnd_auction_game",
@@ -46,7 +46,7 @@ setup(
           'fastapi',
           'uvicorn',
           'websockets',
-          'scikit-learn'
+          'Jinja2'
       ],
 )
 

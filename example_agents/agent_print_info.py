@@ -86,7 +86,13 @@ if __name__ == "__main__":
     
     host = "localhost"
     agent_name = "{}_{}".format(os.path.basename(__file__), random.randint(1, 1000))
-    game = AuctionGameClient(host, agent_name) 
+    player_id = "id_of_human_player"
+    port = 8000
+
+    game = AuctionGameClient(host=host,
+                                agent_name=agent_name,
+                                player_id=player_id,
+                                port=port)
     try:
         game.run(print_info)
     except KeyboardInterrupt:

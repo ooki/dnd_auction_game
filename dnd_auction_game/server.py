@@ -1,6 +1,7 @@
-import html
+
 import random
 import math
+import os
 import asyncio
 from typing import List, Dict, Union
 from collections import defaultdict
@@ -8,260 +9,75 @@ import json
 from contextlib import asynccontextmanager
 
 
-import os
-import websockets
+from fastapi.responses import HTMLResponse
 from fastapi import (
     FastAPI,
     WebSocket,
     WebSocketDisconnect,
 )
-from fastapi.responses import HTMLResponse
+
+from dnd_auction_game.connection_manager import ConnectionManager
+from dnd_auction_game.auction_house import AuctionHouse
+from dnd_auction_game.leadboard import generate_leadboard   
+
+
+game_token = os.environ.get("AH_GAME_TOKEN", "play123")
+play_token = os.environ.get("AH_PLAY_TOKEN", "play123")
+auction_house = AuctionHouse(game_token=game_token, play_token=play_token, save_logs=True)
+connection_manager = ConnectionManager()
+
+async def server_tick():
+    while True:
+        
+        if auction_house.is_active:
+
+            auction_house.process_all_bids()
+            round_data = auction_house.prepare_auction()
+            await connection_manager.broadcast(round_data)
+
+            if auction_house.round_counter >= auction_house.num_rounds_in_game:
+                auction_house.is_active = False
+                auction_house.is_done = True
+
+                await connection_manager.disconnect_all()                
+                
+
+        await asyncio.sleep(1.0)
 
 
 
 @asynccontextmanager
-async def start_server_loop(app: FastAPI):
-
-    asyncio.create_task(update_games_task())    
+async def start_app_background_tasks(app: FastAPI):
+    task = asyncio.create_task(server_tick())
     yield
 
 
-app = FastAPI(lifespan=start_server_loop)
+app = FastAPI(lifespan=start_app_background_tasks)
 
-
-
-
-def generate_leadboard(leadboard, round, is_done):
-
-    do_refresh = """<meta http-equiv="refresh" content="1">"""
-    if is_done:
-        do_refresh = ""
-    html_head = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Leadboard - Auction Game</title>
-        {}
-    </head>
-    """.format(do_refresh)
-
-    h = ""
-    if is_done:
-        h = " - FINISHED GAME"
-    else:
-        h = "Round: {}".format(round)
-        
-    html_body_top = """
-    <body>
-        <h2>Leadboard {}</h2>        
-    """.format(h)
-    
-    html_body_bottom = """                
-    </body>    
-    </html>
-    """
-    board = []
-    for rank, (a_name, points, gold) in enumerate(leadboard):
-        safe_name = html.escape(a_name)
-        if rank == 0:
-            board.append("<p><b>#{} - {} : gold {} : points {}</b></p>".format(rank+1, safe_name, gold, points))
-        else:
-            board.append("<p>#{} - {} : gold {} : <b>points {}</b></p>".format(rank+1, safe_name, gold, points))
-        
-    return html_head + html_body_top + "\n".join(board) + html_body_bottom
-
-
-
-
-
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: List[WebSocket] = []
-
-    async def add_connection(self, websocket: WebSocket):
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-        
-    async def disconnect_all(self):
-        for ws in self.active_connections:
-            await ws.close()            
-
-    async def send_message(self, message: dict, websocket: WebSocket):
-        await websocket.send_json(message)
-
-    async def broadcast(self, message: dict):
-        for connection in self.active_connections:
-            await connection.send_json(message)
-
-
-
-class AuctionHouse:
-    def __init__(self, game_token:str, play_token:str, save_logs=False):
-        self.is_done = False
-        
-        self.game_token = game_token
-        self.play_token = play_token
-        self.save_logs = save_logs
-        self.gold_income = 1000
-        
-        self.agents = {}
-        self.names = {}
-        
-        self.give_out_gold_rounds = 1       
-        self.auctions_per_agent = 1.5
-        self.gold_back_fraction = 0.6
-        
-        self.die_sizes = [2,   3,  4,  6,   8, 10,  12,   20,  20]
-        self.die_prob =  [8,   8,  9,  8,   6,  6,   5,    2,   1]
-        self.max_n_die = [5,   4, 10,  2,   3,  3,   6,    2,   4]
-        self.max_bonus = [10,  2, 16,  8,  21,  2,   5,    7,   3] 
-        self.min_bonus = [-2, -5, -5, -5, -10, -4,  -5,  -2,  -1]
-
-        self.round_counter = 0
-        self.auction_counter = 1
-        self.current_auctions = {}
-        self.current_rolls = {} 
-        self.current_bids = defaultdict(list)
-
-    
-    def reset(self):
-        self.is_done = False
-        self.agents = {}
-        self.names = {}
-        self.current_auctions = {}
-        self.current_rolls = {} 
-        self.current_bids = defaultdict(list)
-        self.round_counter = 0
-        self.auction_counter = 1
-        
-    
-    def add_agent(self, name:str, a_id:str):
-        if a_id in self.agents:
-            print("Agent {}  id:{} reconnected".format(name, a_id))
-            return
-        
-        self.agents[a_id] = {"gold": 0, "points": 0}
-        self.names[a_id] = name
-    
-    
-    def prepare_auction(self):        
-        prev_auctions = self.current_auctions
-        prev_bids = self.current_bids
-        prev_rolls = self.current_rolls
-        
-        self.current_bids = defaultdict(list)
-        self.current_auctions, self.current_rolls = self._generate_auctions()        
-        
-        # update gold for agents
-        if (self.round_counter % self.give_out_gold_rounds) == 0:
-            for agent in self.agents.values():
-                agent["gold"] += self.gold_income
-                
-                
-        out_prev_state = {}
-        for auction_id, info in prev_auctions.items():
-            out_prev_state[auction_id] = {}
-            out_prev_state[auction_id].update(info)            
-            out_prev_state[auction_id]["reward"] = prev_rolls[auction_id]
-            
-            prev_bids[auction_id].sort(key=lambda x:x[1], reverse=True)            
-            out_prev_state[auction_id]["bids"] = [{"a_id": a_id, "gold": g} for a_id, g in prev_bids[auction_id]]
-
-        state = {
-            "round": self.round_counter,
-            "states": self.agents,
-            "auctions": self.current_auctions,
-            "prev_auctions": out_prev_state
-        }
-
-        if self.save_logs:
-            with open("./auction_house_log.jsonln", "a") as fp:
-                fp.write("{}\n".format(json.dumps(state)))
-        
-        self.round_counter += 1
-        return state
-        
-  
-    def _generate_auctions(self) -> Dict[str, dict]:
-        auctions = {}
-        rolls = {} # the amount rolled - hidden for agents
-        
-        indices = list(range(len(self.die_sizes)))
-                
-        n_auctions = int(math.ceil(self.auctions_per_agent*len(self.agents)))
-                
-        for _ in range(n_auctions):
-            i = random.choices(indices, weights=self.die_prob, k=1)[0]            
-            die = self.die_sizes[i]
-            n_dices = random.randint(1, self.max_n_die[i])
-            bonus = random.randint(self.min_bonus[i], self.max_bonus[i])
-                                    
-            auction_id = "a{}".format(self.auction_counter)
-            a = {"die": die, "num": n_dices, "bonus": bonus}
-            auctions[auction_id] = a
-            self.auction_counter += 1
-            
-            points = sum( (random.randint(1, a["die"]) for _ in range(a["num"])) )
-            points += a["bonus"]
-            rolls[auction_id] = points
-                    
-        return auctions, rolls
-    
-    def register_bid(self, a_id:str, auction_id:str, gold:int):        
-        if auction_id not in self.current_auctions:
-            return
-        
-        gold = int(gold)
-        if gold < 1:
-            return
-                
-        if self.agents[a_id]["gold"] < gold:
-            gold = self.agents[a_id]["gold"]
-
-        self.current_bids[auction_id].append( (a_id, gold) )
-        self.agents[a_id]["gold"] -= gold
-    
-    def process_all_bids(self):        
-        
-        for auction_id, bids in self.current_bids.items():
-            win_amount = max(bids, key=lambda x:x[1])[1]
-            for a_id, bid in bids:
-                if bid == win_amount:
-                    self.agents[a_id]["points"] += self.current_rolls[auction_id]
-                
-                else:
-                    # cashback
-                    back_value = int(bid * self.gold_back_fraction)
-                    self.agents[a_id]["gold"] += back_value
-            
-        
-        
-game_token = os.environ.get("AH_GAME_TOKEN", "play123")
-play_token = os.environ.get("AH_PLAY_TOKEN", "play123")
-
-game_manager = AuctionHouse(game_token=game_token, play_token=play_token, save_logs=True)
-connection_manager = ConnectionManager()
 
 @app.websocket("/ws/{token}")
 async def websocket_endpoint_client(websocket: WebSocket, token: str):
     
-    if token != game_manager.game_token:
+
+    if token != auction_house.game_token:
         return
 
-    if game_manager.is_done:
-        game_manager.reset()
+    if auction_house.is_done:
+        auction_house.reset()
 
     try:
-        await websocket.accept()        
+        await websocket.accept()
         agent_info = await websocket.receive_json()
         
-        if len(agent_info["a_id"]) < 5 or len(agent_info["name"]) < 1 or len(agent_info["name"]) > 64:            
+        if len(agent_info["a_id"]) < 5 or len(agent_info["name"]) < 1 or len(agent_info["name"]) > 64:         
             await websocket.close()
             return
         
-    except WebSocketDisconnect:        
+        if len(agent_info["player_id"]) < 1:
+            await websocket.close()
+            return
+        
+    except WebSocketDisconnect:
         return
     
     except:
@@ -270,14 +86,16 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
     
     try:        
         await connection_manager.add_connection(websocket)
-        game_manager.add_agent(agent_info["name"], agent_info["a_id"])
+        auction_house.add_agent(agent_info["name"], agent_info["a_id"], agent_info["player_id"])
         a_id = agent_info["a_id"]
         
-        while True:
+        while auction_house.is_done is False:
             bids = await websocket.receive_json()
                         
             for auction_id, gold in bids.items():
-                game_manager.register_bid(a_id, auction_id, gold)                
+                auction_house.register_bid(a_id, auction_id, gold)       
+
+        await websocket.close()
             
     except WebSocketDisconnect:        
         print("agent: {} disconnected.".format(agent_info["a_id"]))
@@ -290,60 +108,80 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
         return
     
 
+@app.websocket("/ws_run/{play_token}")
+async def websocket_endpoint_runner(websocket: WebSocket, play_token: str):
     
+    print("websocket_endpoint_runner - PLAY TOKEN:", play_token)
 
-@app.websocket("/ws_run/{token}")
-async def websocket_endpoint_runner(websocket: WebSocket, token: str):
-    
-    if token != game_manager.play_token:
+    if play_token != auction_house.play_token:
+        print("wrong play token")
         return
     
-    if game_manager.is_done:
+    if auction_house.is_done:
         print("starting new game")
-        game_manager.reset()
-        
-    
+        auction_house.reset()
+
     try:
         await websocket.accept()
-        await asyncio.sleep(0.01)        
+
+        game_info = await websocket.receive_json()
+        auction_house.num_rounds_in_game = int(game_info["num_rounds"])
+        print("starting game with {} rounds".format(auction_house.num_rounds_in_game))
+
+        game_info = {
+            "game_token": auction_house.game_token,
+            "num_players": len(auction_house.agents),
+        }
+
+        await websocket.send_json(game_info)        
         
-        while True:
-            round_info = await websocket.receive_json()
-            game_manager.process_all_bids()
-                                            
-            round_data = game_manager.prepare_auction()            
-            await connection_manager.broadcast(round_data)
-
-            if round_info["done"] == 1:
-                print("play is done.")
-                game_manager.is_active = False
-                game_manager.is_done = True
-                break
-
-            
     except WebSocketDisconnect:
-        game_manager.is_active = True
-        print("<game done after {} rounds>".format(game_manager.round_counter))
-    
-    finally:     
-        if game_manager.is_done == True:
-            await connection_manager.disconnect_all()
-            game_manager.is_done = True
+        print("game not started due to disconnect.")
+        return
 
+    
+    auction_house.is_active = True
+    print("<started game>")
+
+    try:
+        await websocket.close()
+    except:
+        print("game not started due to error.")
+        
 
 @app.get("/")
 async def get():    
     leadboard = []
-    for a_id, info in game_manager.agents.items():
-        name = game_manager.names[a_id]        
-        leadboard.append((name, info["points"], info["gold"]))
-        
-    leadboard.sort(key=lambda x:x[1], reverse=True)    
-    return HTMLResponse(generate_leadboard(leadboard, game_manager.round_counter ,game_manager.is_done))
+    for a_id, info in auction_house.agents.items():
+        name = auction_house.names[a_id]        
+        leadboard.append([name, info["points"], info["gold"]])
+
+    all_players = []
+    leadboard.sort(key=lambda x:x[1], reverse=True)
+    n_players = max(len(leadboard), 1)
+    for k, (name, points, gold) in enumerate(leadboard):
+        rank = (n_players - k) / n_players
+
+        grade = "F"
+
+        if points > 10:
+
+            if rank > 0.89:
+                grade = "A"
+            elif rank > 0.75:
+                grade = "B"
+            elif rank > 0.60:
+                grade = "C"
+            elif rank > 0.45:
+                grade = "D"
+            else:
+                grade = "E"
+
+        all_players.append({'grade': grade, 'name': name, 'gold': gold, 'points': points})
 
 
+    return HTMLResponse(generate_leadboard(all_players,
+                                           auction_house.round_counter,
+                                           auction_house.is_done))
 
-async def update_games_task():
-    while True:        
-        await game_manager.update()        
-        await asyncio.sleep(0.1)
+

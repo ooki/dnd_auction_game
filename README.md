@@ -9,6 +9,10 @@ The server will reward the auctions to the highest bidders (there can be multipl
 
 If you don't win an auction, you'll get back 60% of the gold you bid. The exact number of points you receive from an auction is determined by rolling dice, so it's a bit unpredictable.  
 
+In addition, the gold you have after bidding is increased with a 10% interest rate, thanks to the Iron Bank of Braavos.
+
+To pass, according to Gandalf, you must obtain at least 10 points. 
+
 _Auctions_
 The auctions are presented in D&D form, for example: 3d6+5 means throw a 6 sided die 3 times and add 5, add it all up
 and thats the number of points given by the auction. In other words the exact amount of points given for an auction is
@@ -38,13 +42,13 @@ Ctrl+C to stop it cleanly.
 # Agents (players)
 See the folder example_agents (on github) for examples on how to create a agent.
     agent_print_info.py
-    agent_linear_prediction.py
-    agent_linear_prediction.py
     agent_tiny_bid.py
+    agent_random_walk.py
+    agent_random_single.py
 
 
 
-NOTE: If playing on a non-local server the agent must set the host in the file.
+NOTE: If playing on a non-local server the agent must set the host&port in the file.
 
 In general you must implement a make_bid() function that takes the following parameters (see agent_print_info.py for how to parse this info):
 
@@ -76,8 +80,7 @@ to play for XX rounds. Example: 'python -m dnd_auction_game.play 42' will play t
 Remember: connect all agents BEFORE running play_game.py, the server does not need to be restarted.
 
 # The logs (complete history)
-The logs (complate history) will be stored in ./logs use it to 
-create clever agents.
+The logs (complete history) will be stored in ./logs use it to  create clever agents.
 
 
 

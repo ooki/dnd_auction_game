@@ -1,6 +1,6 @@
 # logs
 logs/
-auction_house_log.jsonln
+auction_house_log*.jsonln
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
