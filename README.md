@@ -15,7 +15,7 @@ To pass, according to Gandalf, you must obtain at least 10 points.
 
 *Turns out: Reading the fine print, tells us that the interest rate starts at 10% (= 1.1) and follows the function:  $1 + \sigma(4 - \frac{g}{1000} )$. Where $\sigma(\cdot)$ is the sigmoid function and $g$ is the amount of gold you have.
 
-_Auctions_
+_Auctions_  
 The auctions are presented in D&D form, for example: 3d6+5 means throw a 6 sided die 3 times and add 5, add it all up
 and thats the number of points given by the auction. In other words the exact amount of points given for an auction is
 stochastic. 
