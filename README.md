@@ -13,7 +13,7 @@ In addition, the gold you have after bidding is increased with a 10% interest ra
 
 To pass, according to Gandalf, you must obtain at least 10 points. 
 
-*Turns out: Reading the fine print, tells us that the interest rate starts at 10% and follows the function: $\sigma(4 - (g / 1000) )$. Where $\sigma(\cdot)$ is the sigmoid function and $g$ is the amount of gold you have.
+*Turns out: Reading the fine print, tells us that the interest rate starts at 10% (= 1.1) and follows the function:  $1 + \sigma(4 - \frac{g}{1000} )$. Where $\sigma(\cdot)$ is the sigmoid function and $g$ is the amount of gold you have.
 
 _Auctions_
 The auctions are presented in D&D form, for example: 3d6+5 means throw a 6 sided die 3 times and add 5, add it all up
