@@ -9,9 +9,11 @@ The server will reward the auctions to the highest bidders (there can be multipl
 
 If you don't win an auction, you'll get back 60% of the gold you bid. The exact number of points you receive from an auction is determined by rolling dice, so it's a bit unpredictable.  
 
-In addition, the gold you have after bidding is increased with a 10% interest rate, thanks to the Iron Bank of Braavos.
+In addition, the gold you have after bidding is increased with a 10% interest rate*, thanks to the Iron Bank of Braavos.
 
 To pass, according to Gandalf, you must obtain at least 10 points. 
+
+*Turns out: Reading the fine print, tells us that the interest rate starts at 10% and follows the function: $\sigma(4 - (g / 1000) )$. Where $\sigma(\cdot)$ is the sigmoid function and $g$ is the amount of gold you have.
 
 _Auctions_
 The auctions are presented in D&D form, for example: 3d6+5 means throw a 6 sided die 3 times and add 5, add it all up

@@ -6,6 +6,22 @@ import json
 import math
 import os
 
+
+def braavos_bank_interest_rate(gold:int, k:float) -> float:
+
+    if gold < 1:
+        return gold
+        
+    gold_in_thousands = gold / 1000
+
+    if gold_in_thousands > (k + 6):
+        return 1.0
+
+    interest_rate = 1 / (1 + math.exp(- (k - gold_in_thousands)))
+    return 1.0 + min(0.1, interest_rate)
+
+
+
 class AuctionHouse:
     def __init__(self, game_token:str, play_token:str, save_logs=False):
         self.is_done = False
@@ -21,7 +37,7 @@ class AuctionHouse:
         self.agents = {}
         self.names = {}
         
-        self.bank_interest_rate = 1.10
+        self.bank_interest_rate_k = 2
         self.auctions_per_agent = 1.5
         self.gold_back_fraction = 0.6
         
@@ -90,14 +106,16 @@ class AuctionHouse:
         
         self.current_bids = defaultdict(list)
         self.current_auctions, self.current_rolls = self._generate_auctions()        
+
+
         
         # update gold for agents
         for agent in self.agents.values():
-
             # bank of Braavos gives interest on stored gold
-            agent["gold"] = int(agent["gold"] * self.bank_interest_rate)
+            rate = braavos_bank_interest_rate(agent["gold"], self.bank_interest_rate_k)
+            agent["gold"] = int(agent["gold"] * rate)
             agent["gold"] += self.gold_income
-                
+
                 
         out_prev_state = {}
         for auction_id, info in prev_auctions.items():
@@ -172,7 +190,7 @@ class AuctionHouse:
                 
                 else:
                     # cashback
-                    back_value = int(bid * self.gold_back_fraction)
+                    back_value = int(math.floor(bid * self.gold_back_fraction))
                     self.agents[a_id]["gold"] += back_value
             
         
