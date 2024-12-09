@@ -59,7 +59,8 @@ class AuctionGameClient:
                 agent_info_json = json.dumps(agent_info)
                 print(agent_info_json)
                 await sock.send(agent_info_json)
-                                
+
+         
                 while True:
                     round_data_raw = await sock.recv()
                     round_data = json.loads(round_data_raw)
@@ -67,8 +68,16 @@ class AuctionGameClient:
                     round_data["current_agent"] = self.agent_id
                     with open(self.log_file, "a") as fp:
                         fp.write("{}\n".format(json.dumps(round_data)))
+                        
+                    #                     
+                    current_round = round_data["round"]
+
+                    reminder_random_info = {}
+                    reminder_random_info["gold_income_per_round"] = round_data["reminder_gold_income"]
+                    reminder_random_info["bank_interest_per_round"] = round_data["reminder_bank_interest"]
+                    reminder_random_info["bank_limit_per_round"] = round_data["reminder_bank_limit"]
                     
-                    new_bids = bid_callback(self.agent_id, round_data["states"], round_data["auctions"], round_data["prev_auctions"])                    
+                    new_bids = bid_callback(self.agent_id, current_round, round_data["states"], round_data["auctions"], round_data["prev_auctions"], reminder_random_info)                    
                     await sock.send(json.dumps(new_bids))
         
         except ConnectionClosedError:

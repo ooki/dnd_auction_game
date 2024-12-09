@@ -50,7 +50,7 @@ if __name__ == "__main__":
     else:
         play_token = "play123"
         
-    runner = AuctionGameRunner(host, n_rounds=n_rounds, play_token=play_token)
+    runner = AuctionGameRunner(host, n_rounds=n_rounds, play_token=play_token, port=8000)
     print("Running the game for: {} rounds.".format(n_rounds))
     runner.run()
     

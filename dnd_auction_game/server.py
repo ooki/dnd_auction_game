@@ -23,7 +23,24 @@ from dnd_auction_game.leadboard import generate_leadboard
 
 game_token = os.environ.get("AH_GAME_TOKEN", "play123")
 play_token = os.environ.get("AH_PLAY_TOKEN", "play123")
-auction_house = AuctionHouse(game_token=game_token, play_token=play_token, save_logs=True)
+
+save_all_states = os.environ.get("AH_SAVE_ALL_STATES", 0)
+
+import pickle
+
+
+if save_all_states > 0:
+    print("save all states - ACTIVATED")
+
+state_file = "state.pkl"
+if save_all_states > 0 and os.path.isfile(state_file):
+    print("read state from file.")
+    with open(state_file, "rb") as fp:
+        auction_house = pickle.load(fp)
+else:
+    print("starting raw house")
+    auction_house = AuctionHouse(game_token=game_token, play_token=play_token, save_logs=True)
+
 connection_manager = ConnectionManager()
 
 async def server_tick():
@@ -32,7 +49,12 @@ async def server_tick():
         if auction_house.is_active:
 
             auction_house.process_all_bids()
-            round_data = auction_house.prepare_auction()
+            try:
+                round_data = auction_house.prepare_auction()
+            except Exception as e:
+                print("error in prepare_auction")
+                print(e)
+
             await connection_manager.broadcast(round_data)
 
             if auction_house.round_counter >= auction_house.num_rounds_in_game:
@@ -40,7 +62,10 @@ async def server_tick():
                 auction_house.is_done = True
 
                 await connection_manager.disconnect_all()                
-                
+            
+            if save_all_states > 0:
+                with open(state_file, "wb") as fp:
+                    pickle.dump(auction_house, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
         await asyncio.sleep(1.0)
 
@@ -82,7 +107,6 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
     
     except:
         return
-        
     
     try:        
         await connection_manager.add_connection(websocket)
@@ -125,7 +149,8 @@ async def websocket_endpoint_runner(websocket: WebSocket, play_token: str):
         await websocket.accept()
 
         game_info = await websocket.receive_json()
-        auction_house.num_rounds_in_game = int(game_info["num_rounds"])
+        #auction_house.num_rounds_in_game = int(game_info["num_rounds"])
+        auction_house.set_num_rounds(int(game_info["num_rounds"]))
         print("starting game with {} rounds".format(auction_house.num_rounds_in_game))
 
         game_info = {
@@ -170,9 +195,9 @@ async def get():
                 grade = "A"
             elif rank > 0.75:
                 grade = "B"
-            elif rank > 0.60:
+            elif rank > 0.55:
                 grade = "C"
-            elif rank > 0.45:
+            elif rank > 0.35:
                 grade = "D"
             else:
                 grade = "E"

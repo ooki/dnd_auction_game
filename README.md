@@ -9,11 +9,11 @@ The server will reward the auctions to the highest bidders (there can be multipl
 
 If you don't win an auction, you'll get back 60% of the gold you bid. The exact number of points you receive from an auction is determined by rolling dice, so it's a bit unpredictable.  
 
-In addition, the gold you have after bidding is increased with a 10% interest rate*, thanks to the Iron Bank of Braavos.
+
+In addition, Iron Bank of Braavos will follow the current interest rate (found in the bank state) up to a limit. So if the upper limit is 2000, the interest is 10% and you have 3000 gold, then
+you will get 10% interest on the first 2000 gold you have. The bank will also adjust the starting gold to be current marked rate.
 
 To pass, according to Gandalf, you must obtain at least 10 points. 
-
-*Turns out: Reading the fine print, tells us that the interest rate starts at 10% (= 1.1) and follows the function:  $1 + \sigma(4 - \frac{g}{1000} )$. Where $\sigma(\cdot)$ is the sigmoid function and $g$ is the amount of gold you have.
 
 _Auctions_  
 The auctions are presented in D&D form, for example: 3d6+5 means throw a 6 sided die 3 times and add 5, add it all up
@@ -56,6 +56,8 @@ In general you must implement a make_bid() function that takes the following par
 
 * @agent_id:str - a string that is the agent id of the current agent.
 
+* @current_round:int - the current round
+
 * @states:dict - a dict of all agents, key: agent_id, value is a dict:  
               {"gold": agents_gold, "points": agents points}
 
@@ -70,6 +72,8 @@ In general you must implement a make_bid() function that takes the following par
 @auctions, but also contains the "reward" field that tells how many 
 the winner of the auction gained. In addition it contain a "bids" key
 that gives a list of the bids for this particular auction, sorted so that the winning bid is always the first in the list.
+
+* @bank_state:dict - a dict containing the marked rates for the rest of the game: gold_income_per_round, bank_interest_per_round, bank_limit_per_round. Where the first [0] index gives the next rounds data.
 
 
 # Play the Game

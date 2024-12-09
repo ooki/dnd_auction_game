@@ -7,18 +7,70 @@ import math
 import os
 
 
-def braavos_bank_interest_rate(gold:int, k:float) -> float:
 
-    if gold < 1:
-        return gold
+def generate_gold_random_walk(n_steps:int) -> List[float]:
+
+    gold_per_round = 1000
+    step_size = 100
+    max_gold_per_round = 10000
+
+    gold = [gold_per_round]
+    for _ in range(n_steps-1):
+        next_gold = gold[-1] + random.randint(-step_size, step_size)
+
+        if next_gold < 0:
+            next_gold = 0
         
-    gold_in_thousands = gold / 1000
+        if next_gold > max_gold_per_round:
+            next_gold = max_gold_per_round
 
-    if gold_in_thousands > (k + 6):
-        return 1.0
+        gold.append(next_gold)
 
-    interest_rate = 1 / (1 + math.exp(- (k - gold_in_thousands)))
-    return 1.0 + min(0.1, interest_rate)
+    return gold
+
+def braavos_bank_limit_random_walk(n_steps:int) -> List[int]:
+
+    upper_limit_start = 2000
+    upper_limit_end = 10000
+    step_size = 100
+
+    upper_limits = [upper_limit_start]
+    for _ in range(n_steps-1):
+        next_limit = upper_limits[-1] + random.randint(-step_size, step_size)
+
+        if next_limit < 0:
+            next_limit = 0
+        
+        if next_limit > upper_limit_end:
+            next_limit = upper_limit_end
+
+        upper_limits.append(next_limit)
+
+    return upper_limits
+
+def braavos_bank_interest_rate_random_walk(n_steps:int) -> List[float]:
+
+    start_rate = 1.05
+    min_rate = 0.9
+    max_rate = 1.15
+    step_size = 0.01
+
+    rates = [start_rate]
+    for _ in range(n_steps-1):
+        next_rate = rates[-1] + random.uniform(-step_size, step_size)
+
+        if next_rate < min_rate:
+            next_rate = min_rate
+        
+        if next_rate > max_rate:
+            next_rate = max_rate
+
+        rates.append(next_rate)
+
+    return rates
+
+
+
 
 
 
@@ -37,7 +89,6 @@ class AuctionHouse:
         self.agents = {}
         self.names = {}
         
-        self.bank_interest_rate_k = 2
         self.auctions_per_agent = 1.5
         self.gold_back_fraction = 0.6
         
@@ -52,7 +103,12 @@ class AuctionHouse:
         self.current_auctions = {}
         self.current_rolls = {} 
         self.current_bids = defaultdict(list)
-        self.num_rounds_in_game = 10
+        
+        self.num_rounds_in_game : int = None
+        self.gold_income_per_round : List[int] = None
+        self.bank_limit_per_round : List[int] = None
+        self.bank_interest_per_round : List[float] = None
+        self.set_num_rounds(10)
         
         # set the logfile
         self._find_log_file()
@@ -83,7 +139,14 @@ class AuctionHouse:
         self.current_bids = defaultdict(list)
         self.round_counter = 0
         self.auction_counter = 1
-        self.num_rounds_in_game = 10
+        self.set_num_rounds(10)
+
+    def set_num_rounds(self, num_rounds:int):
+        self.num_rounds_in_game = num_rounds
+        
+        self.gold_income_per_round = generate_gold_random_walk(num_rounds)
+        self.bank_limit_per_round = braavos_bank_limit_random_walk(num_rounds)
+        self.bank_interest_per_round = braavos_bank_interest_rate_random_walk(num_rounds)
         
     
     def add_agent(self, name:str, a_id:str, player_id:str):
@@ -110,17 +173,27 @@ class AuctionHouse:
 
         
         # update gold for agents
+        upper_rate = self.bank_limit_per_round[self.round_counter]
+        interest_rate = self.bank_interest_per_round[self.round_counter]
+        gold_income = self.gold_income_per_round[self.round_counter]
+
         for agent in self.agents.values():
             # bank of Braavos gives interest on stored gold
-            rate = braavos_bank_interest_rate(agent["gold"], self.bank_interest_rate_k)
-            agent["gold"] = int(agent["gold"] * rate)
-            agent["gold"] += self.gold_income
+            
+            interest_available_gold = 0
+            if agent["gold"] >= upper_rate:
+                interest_available_gold = upper_rate
+            else:
+                interest_available_gold = agent["gold"]
+            
+            agent["gold"] = int(interest_available_gold * interest_rate)            
+            agent["gold"] += gold_income
 
                 
         out_prev_state = {}
         for auction_id, info in prev_auctions.items():
             out_prev_state[auction_id] = {}
-            out_prev_state[auction_id].update(info)            
+            out_prev_state[auction_id].update(info)
             out_prev_state[auction_id]["reward"] = prev_rolls[auction_id]
             
             prev_bids[auction_id].sort(key=lambda x:x[1], reverse=True)            
@@ -130,7 +203,10 @@ class AuctionHouse:
             "round": self.round_counter,
             "states": self.agents,
             "auctions": self.current_auctions,
-            "prev_auctions": out_prev_state
+            "prev_auctions": out_prev_state,
+            "reminder_gold_income": self.gold_income_per_round[self.round_counter+1:], # +1 as we want to report on the next state - not the current state
+            "reminder_bank_limit": self.bank_limit_per_round[self.round_counter+1:],
+            "reminder_bank_interest": self.bank_interest_per_round[self.round_counter+1:],
         }
 
         if self.save_logs and self.log_file is not None:
@@ -193,4 +269,7 @@ class AuctionHouse:
                     back_value = int(math.floor(bid * self.gold_back_fraction))
                     self.agents[a_id]["gold"] += back_value
             
+
+
+    
         

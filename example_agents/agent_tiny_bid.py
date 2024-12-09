@@ -12,21 +12,28 @@ from dnd_auction_game import AuctionGameClient
 ############################################################################################
     
 
-def tiny_bid(agent_id:str, states:dict, auctions:dict, prev_auctions:dict):
+def tiny_bid(agent_id:str, current_round:int, states:dict, auctions:dict, prev_auctions:dict, bank_state:dict):
     agent_state = states[agent_id]
     current_gold = agent_state["gold"]
+
+    next_round_gold_income = 0
+    if len(bank_state["gold_income_per_round"]) > 0:
+        next_round_gold_income = bank_state["gold_income_per_round"][0]
+
+
+    # if we are getting a lot of money next round, increase how much we can bid to 100.
+    max_bid = 20
+    if next_round_gold_income > 1050:
+        max_bid = 100        
     
     bids = {}        
-    for auction_id in auctions.keys():
-        
-        bid = random.randint(1, 20)
+    for auction_id in auctions.keys():        
+        bid = random.randint(1, max_bid)
         if bid < current_gold:
             bids[auction_id] = bid
             current_gold -= bid
             
     return bids
-
-
 
 if __name__ == "__main__":
     

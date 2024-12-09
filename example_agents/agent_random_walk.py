@@ -22,12 +22,21 @@ class RandomWalkAgent:
 
         self.last_bid_auction_id = None
 
-    def random_walk(self, agent_id:str, states:dict, auctions:dict, prev_auctions:dict):
+    def random_walk(self, agent_id:str, current_round:int, states:dict, auctions:dict, prev_auctions:dict, bank_state:dict):
         agent_state = states[agent_id]
         current_gold = agent_state["gold"]
 
         if current_gold < self.current_bid:
             self.current_bid -= random.randint(1, self.max_move_up_or_down)        
+
+        # how much gold we get next round
+        next_round_gold_income = 0
+        if len(bank_state["gold_income_per_round"]) > 0:
+            next_round_gold_income = bank_state["gold_income_per_round"][0]
+
+        # always bid at least 50% off what we get next round
+        if self.current_bid < next_round_gold_income*0.5:
+            self.current_bid = int(next_round_gold_income*0.5)
 
         # move up or down based on if we won the auction or not
         if self.last_bid_auction_id is not None and len(prev_auctions) > 0:
