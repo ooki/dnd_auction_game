@@ -15,6 +15,8 @@ you will get 10% interest on the first 2000 gold you have. The bank will also ad
 
 To pass, according to Gandalf, you must obtain at least 10 points. 
 
+**NOTE: If your agent worked with the old version (2.x) then you will need to update the function signature, see one of the premade agents to see how it's done.**
+
 _Auctions_  
 The auctions are presented in D&D form, for example: 3d6+5 means throw a 6 sided die 3 times and add 5, add it all up
 and thats the number of points given by the auction. In other words the exact amount of points given for an auction is

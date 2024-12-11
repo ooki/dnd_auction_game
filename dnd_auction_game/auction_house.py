@@ -259,6 +259,10 @@ class AuctionHouse:
     def process_all_bids(self):        
         
         for auction_id, bids in self.current_bids.items():
+
+            if not bids or len(bids) == 0:
+                continue
+
             win_amount = max(bids, key=lambda x:x[1])[1]
             for a_id, bid in bids:
                 if bid == win_amount:

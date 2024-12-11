@@ -32,8 +32,8 @@ class ConnectionManager:
         await websocket.send_json(message)
 
     async def broadcast(self, message: dict):
-        for connection in self.active_connections:
-            to_disconnect = []
+        to_disconnect = []
+        for connection in self.active_connections:            
             try:
                 await connection.send_json(message)                
             except:
