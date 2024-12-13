@@ -78,7 +78,7 @@ def parse_logs(competition_num):
                     }
                 )
 
-    multiplier = 21 * (competition_num - 1)
+    multiplier = 10 * (competition_num - 1)
     agent_logs_df, agent_files = load_agent_logs(agent_ids, multiplier)
     files_used.extend(agent_files)
 
@@ -134,7 +134,7 @@ app.layout = html.Div(
         dcc.Dropdown(
             id="bot-selector",
             options=create_dropdown_options(player_mapping),
-            value=list(player_mapping.keys())[:3],
+            value=list(player_mapping.keys()),
             multi=True,
             style={"width": "60%", "margin": "auto"},
         ),
