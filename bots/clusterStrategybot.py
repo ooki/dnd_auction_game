@@ -57,11 +57,11 @@ class ClusterBot:
 
 
 if __name__ == "__main__":
-    bot = ClusterBot(k=2)
+    bot = ClusterBot(k=20)
     game = AuctionGameClient(
         host="88.90.236.106",
         agent_name="ClusterBall",
-        player_id="ClusterBall",
+        player_id="Kombo",
         port=8095,
     )
     game.run(bot.bid)
