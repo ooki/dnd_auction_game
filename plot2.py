@@ -14,15 +14,17 @@ app.title = "Auction Bot Dashboard"
 
 def load_agent_logs(agent_ids, multiplier):
     """Load agent log files based on competition."""
+    files = []
     data = []
     for agent_id in agent_ids:
-        log_file = f"logs/agent_local_rand_id_{
-            agent_id}_n{multiplier * 21}.jsonl"
+        # Correct mapping: multiplier = 21 * (competition_num - 1)
+        log_file = f"logs/agent_local_rand_id_{agent_id}_n{multiplier}.jsonl"
+        files.append(log_file)
         if os.path.exists(log_file):
             with open(log_file, "r") as f:
                 for line in f:
                     data.append(json.loads(line))
-    return pd.DataFrame(data)
+    return pd.DataFrame(data), files
 
 
 def parse_logs(competition_num):
@@ -30,6 +32,11 @@ def parse_logs(competition_num):
     # File names
     player_file = f"auction_house_log_player_id_{competition_num}.jsonln"
     auction_file = f"auction_house_log_{competition_num}.jsonln"
+
+    # Verify file existence
+    files_used = [player_file, auction_file]
+    if not os.path.exists(player_file) or not os.path.exists(auction_file):
+        return None, None, None, None, {}, files_used
 
     # Load player mappings
     with open(player_file, "r") as f:
@@ -86,8 +93,10 @@ def parse_logs(competition_num):
                     }
                 )
 
-    # Load agent logs
-    agent_logs_df = load_agent_logs(agent_ids, competition_num)
+    # Correct multiplier: 21 * (competition_num - 1)
+    multiplier = 21 * (competition_num - 1)
+    agent_logs_df, agent_files = load_agent_logs(agent_ids, multiplier)
+    files_used.extend(agent_files)
 
     return (
         pd.DataFrame(states),
@@ -95,12 +104,13 @@ def parse_logs(competition_num):
         pd.DataFrame(bids),
         pd.DataFrame(agent_logs_df),
         player_mapping,
+        files_used,
     )
 
 
 # Default competition
 default_competition = 1
-states_df, auctions_df, bids_df, agent_logs_df, player_mapping = parse_logs(
+states_df, auctions_df, bids_df, agent_logs_df, player_mapping, files_used = parse_logs(
     default_competition
 )
 
@@ -123,6 +133,10 @@ app.layout = html.Div(
             ],
             style={"textAlign": "center", "marginBottom": "20px"},
         ),
+        # Display files being used
+        html.Div(
+            id="file-display", style={"textAlign": "center", "marginBottom": "20px"}
+        ),
         # Bot selector
         dcc.Dropdown(
             id="bot-selector",
@@ -134,7 +148,6 @@ app.layout = html.Div(
             multi=True,
             style={"width": "60%", "margin": "auto"},
         ),
-        html.Div(id="graphs-container"),
         dcc.Graph(id="gold-over-time"),
         dcc.Graph(id="points-over-time"),
         dcc.Graph(id="bids-per-auction"),
@@ -146,15 +159,45 @@ app.layout = html.Div(
 
 
 @app.callback(
-    Output("bot-selector", "options"),
+    [Output("bot-selector", "options"), Output("file-display", "children")],
     Input("competition-selector", "value"),
 )
-def update_bots(competition_num):
-    global states_df, auctions_df, bids_df, agent_logs_df, player_mapping
-    states_df, auctions_df, bids_df, agent_logs_df, player_mapping = parse_logs(
-        competition_num
+def update_dashboard(competition_num):
+    global states_df, auctions_df, bids_df, agent_logs_df, player_mapping, files_used
+    states_df, auctions_df, bids_df, agent_logs_df, player_mapping, files_used = (
+        parse_logs(competition_num)
     )
-    return [{"label": name, "value": bot_id} for bot_id, name in player_mapping.items()]
+    if states_df is None:
+        return [], f"No data available for Competition {competition_num}"
+
+    bot_options = [
+        {"label": name, "value": bot_id} for bot_id, name in player_mapping.items()
+    ]
+
+    # Generate aesthetic file display
+    auction_files = files_used[:2]
+    agent_files = files_used[2:]
+    file_text = html.Div(
+        [
+            html.H4(f"Files loaded for Competition {competition_num}:"),
+            html.Ul(
+                [html.Li(file) for file in auction_files],
+                style={"marginBottom": "10px"},
+            ),
+            html.H5("Agent Logs:"),
+            html.Ul(
+                [html.Li(file) for file in agent_files],
+                style={
+                    "maxHeight": "200px",
+                    "overflowY": "scroll",
+                    "border": "1px solid #ccc",
+                    "padding": "10px",
+                },
+            ),
+        ]
+    )
+
+    return bot_options, file_text
 
 
 @app.callback(Output("gold-over-time", "figure"), [Input("bot-selector", "value")])
