@@ -12,19 +12,25 @@ from dnd_auction_game import AuctionGameClient
 ############################################################################################
     
 
-def tiny_bid(agent_id:str, states:dict, auctions:dict, prev_auctions:dict):
+def tiny_bid(agent_id:str, states:dict, auctions:dict, prev_auctions:dict, pool_gold:int, prev_pool_buys:dict):
     agent_state = states[agent_id]
     current_gold = agent_state["gold"]
+
+    print("Current pool size: {}".format(pool_gold))
     
-    bids = {}        
+    bids = {}       
+
+
     for auction_id in auctions.keys():
-        
         bid = random.randint(1, 20)
         if bid < current_gold:
-            bids[auction_id] = bid
+            bids[auction_id] = bid 
             current_gold -= bid
-            
-    return bids
+
+
+    # 
+    points_for_pool = 0
+    return {"bids": bids, "pool": points_for_pool}
 
 
 

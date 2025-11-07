@@ -17,6 +17,9 @@ class AuctionHouse:
         self.play_token = play_token
         self.save_logs = save_logs
         self.gold_income = 1000
+
+        self.gold_in_pool = 0 # the gold that was removed during the cashbacki
+        self.convert_to_pool_fraction = 0.7 # the fraction of gold that is returned to the hoard
         
         self.agents = {}
         self.names = {}
@@ -37,6 +40,8 @@ class AuctionHouse:
         self.current_rolls = {} 
         self.current_bids = defaultdict(list)
         self.num_rounds_in_game = 10
+        self.priority = {}
+        self.current_pool_buys = {}
         
         # set the logfile
         self._find_log_file()
@@ -60,6 +65,7 @@ class AuctionHouse:
 
     def reset(self):
         self.is_done = False
+        self.is_active = False
         self.agents = {}
         self.names = {}
         self.current_auctions = {}
@@ -68,28 +74,51 @@ class AuctionHouse:
         self.round_counter = 0
         self.auction_counter = 1
         self.num_rounds_in_game = 10
+        self.priority = {}
+        self.gold_in_pool = 0
+        self._find_log_file()
         
     
+    def assign_priorities(self):
+        self.priority = {}
+        used = set()
+        for a_id in self.agents.keys():
+            while True:
+                p = random.randint(1, 10**9)
+                if p not in used:
+                    used.add(p)
+                    self.priority[a_id] = p
+                    break
+        
     def add_agent(self, name:str, a_id:str, player_id:str):
         if a_id in self.agents:
             print("Agent {}  id:{} reconnected".format(name, a_id))
             return
 
-        with open(self.log_player_id_file, 'a') as fp:
-            pid = {"player_id": player_id, "agent_id": a_id, "name": name}
-            fp.write("{}\n".format(json.dumps(pid)))
+        try:
+            with open(self.log_player_id_file, 'a') as fp:
+                pid = {"player_id": player_id, "agent_id": a_id, "name": name}
+                fp.write("{}\n".format(json.dumps(pid)))
+        except Exception as e:
+            print("error writing player id log:", e)
+            self.save_logs = False
                     
         self.agents[a_id] = {"gold": 0, "points": 0}
         self.names[a_id] = name
     
     
-    def prepare_auction(self):        
+    def prepare_auctions_and_pool(self):        
         prev_auctions = self.current_auctions
         prev_bids = self.current_bids
         prev_rolls = self.current_rolls
         
         self.current_bids = defaultdict(list)
-        self.current_auctions, self.current_rolls = self._generate_auctions()        
+        self.current_auctions, self.current_rolls = self._generate_auctions()
+
+        # copy the pool buys to broodcast, reset the pool buys
+        buy_pool_copy = self.current_pool_buys.copy()
+        self.current_pool_buys = {} 
+
         
         # update gold for agents
         for agent in self.agents.values():
@@ -112,12 +141,18 @@ class AuctionHouse:
             "round": self.round_counter,
             "states": self.agents,
             "auctions": self.current_auctions,
-            "prev_auctions": out_prev_state
+            "prev_auctions": out_prev_state,
+            "prev_pool_buys": buy_pool_copy,
+            "pool": self.gold_in_pool,
         }
 
         if self.save_logs and self.log_file is not None:
-            with open(self.log_file, "a") as fp:
-                fp.write("{}\n".format(json.dumps(state)))
+            try:
+                with open(self.log_file, "a") as fp:
+                    fp.write("{}\n".format(json.dumps(state)))
+            except Exception as e:
+                print("error writing auction log:", e)
+                self.save_logs = False
         
         self.round_counter += 1
         return state
@@ -147,32 +182,79 @@ class AuctionHouse:
             rolls[auction_id] = points
                     
         return auctions, rolls
+
+    def register_pool_buy(self, a_id:str, points:int):
+        points = int(max(points, 0))
+
+        self.current_pool_buys[a_id] = points
+            
+        # register the negative amount of points (if any)
+        self.agents[a_id]["points"] -= points
+
     
-    def register_bid(self, a_id:str, auction_id:str, gold:int):        
+    def process_pool_buys(self):
+
+        total_amount = max(1, sum(self.current_pool_buys.values()))
+
+        # now divide the pool by the fraction each player has bought
+        for a_id, points in self.current_pool_buys.items():
+
+            fraction = points / total_amount
+            gold_return = int(self.gold_in_pool * fraction)
+            if points > 0:
+                gold_return = min(1, gold_return)
+
+            self.agents[a_id]["gold"] += gold_return
+
+
+
+    def register_bid(self, a_id:str, auction_id:str, gold:int):       
         if auction_id not in self.current_auctions:
             return
-        
+
         gold = int(gold)
         if gold < 1:
             return
+
                 
         if self.agents[a_id]["gold"] < gold:
             return
-                
+
         self.current_bids[auction_id].append( (a_id, gold) )
         self.agents[a_id]["gold"] -= gold
+
     
     def process_all_bids(self):        
-        
+
+        gold_from_non_winning_bids = 0
         for auction_id, bids in self.current_bids.items():
+            if not bids:
+                continue
+            points = self.current_rolls.get(auction_id)
+            if points is None:
+                continue
             win_amount = max(bids, key=lambda x:x[1])[1]
+            tied = [a_id for a_id, bid in bids if bid == win_amount]
+            if len(tied) == 1:
+                winner = tied[0]
+            else:
+                winner = max(tied, key=lambda a: self.priority.get(a, 0))
+                losers_tied = [a for a in tied if a != winner]
+                if losers_tied:
+                    weights = [1.0 / max(self.priority.get(a, 1), 1) for a in losers_tied]
+                    swap_with = random.choices(losers_tied, weights=weights, k=1)[0]
+                    pw = self.priority.get(winner, 0)
+                    pl = self.priority.get(swap_with, 0)
+                    self.priority[winner] = pl
+                    self.priority[swap_with] = pw
             for a_id, bid in bids:
-                if bid == win_amount:
-                    self.agents[a_id]["points"] += self.current_rolls[auction_id]
-                
+                if a_id == winner and bid == win_amount:
+                    self.agents[a_id]["points"] += points
                 else:
-                    # cashback
                     back_value = int(bid * self.gold_back_fraction)
+                    removed_value = max(0, bid - back_value)
+                    gold_from_non_winning_bids += removed_value
                     self.agents[a_id]["gold"] += back_value
-            
+
+        self.gold_in_pool = max(len(self.agents), int(gold_from_non_winning_bids * self.convert_to_pool_fraction))
         

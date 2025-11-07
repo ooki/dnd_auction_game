@@ -19,7 +19,7 @@ class RandomWalkAgent:
 
         self.last_bid_auction_id = None
 
-    def random_walk(self, agent_id:str, states:dict, auctions:dict, prev_auctions:dict):
+    def random_walk(self, agent_id:str, states:dict, auctions:dict, prev_auctions:dict, pool_gold:int, prev_pool_buys:dict):
         agent_state = states[agent_id]
         current_gold = agent_state["gold"]
 
@@ -54,8 +54,9 @@ class RandomWalkAgent:
 
             bids[target_auction_id] = self.current_bid
             self.last_bid_auction_id = target_auction_id
-                
-        return bids
+
+        points_for_pool = 1 
+        return {"bids": bids, "pool": points_for_pool}
 
 
 

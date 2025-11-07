@@ -68,7 +68,12 @@ class AuctionGameClient:
                     with open(self.log_file, "a") as fp:
                         fp.write("{}\n".format(json.dumps(round_data)))
                     
-                    new_bids = bid_callback(self.agent_id, round_data["states"], round_data["auctions"], round_data["prev_auctions"])                    
+                    new_bids = bid_callback(self.agent_id, round_data["states"],
+                                                           round_data["auctions"],
+                                                           round_data["prev_auctions"],
+                                                           round_data["pool"],
+                                                           round_data["prev_pool_buys"])    
+
                     await sock.send(json.dumps(new_bids))
         
         except ConnectionClosedError:

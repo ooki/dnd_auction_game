@@ -1,4 +1,3 @@
-
 import random
 import math
 import os
@@ -27,22 +26,43 @@ auction_house = AuctionHouse(game_token=game_token, play_token=play_token, save_
 connection_manager = ConnectionManager()
 
 async def server_tick():
-    while True:
+  while True:
         
-        if auction_house.is_active:
+    if auction_house.is_active:
 
-            auction_house.process_all_bids()
-            round_data = auction_house.prepare_auction()
-            await connection_manager.broadcast(round_data)
+            try:
+                auction_house.process_pool_buys()
+            except Exception as e:
+                print("error in process_pool_buys:", e)
+
+            try:
+                auction_house.process_all_bids()
+            except Exception as e:
+                print("error in process_all_bids:", e)
+
+            round_data = None
+            try:
+                round_data = auction_house.prepare_auctions_and_pool()
+            except Exception as e:
+                print("error in prepare_auctions_and_pool:", e)
+
+            if round_data is not None:
+                try:
+                    await connection_manager.broadcast(round_data, timeout=0.5)
+                except Exception as e:
+                    print("error in broadcast:", e)
 
             if auction_house.round_counter >= auction_house.num_rounds_in_game:
                 auction_house.is_active = False
                 auction_house.is_done = True
 
-                await connection_manager.disconnect_all()                
+                try:
+                    await connection_manager.disconnect_all()
+                except Exception as e:
+                    print("error in disconnect_all:", e)
                 
 
-        await asyncio.sleep(1.0)
+    await asyncio.sleep(1.0)
 
 
 
@@ -84,16 +104,45 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
         return
         
     
+    # Block new players after the game has started; allow reconnections only
+    if auction_house.is_active and agent_info["a_id"] not in auction_house.agents:
+        try:
+            await websocket.close()
+        except:
+            pass
+        return
+    
     try:        
         await connection_manager.add_connection(websocket)
         auction_house.add_agent(agent_info["name"], agent_info["a_id"], agent_info["player_id"])
         a_id = agent_info["a_id"]
         
         while auction_house.is_done is False:
-            bids = await websocket.receive_json()
+            binds = {}
+            pool = 0
+
+            bids_and_pool = await websocket.receive_json()
+            try:
+                if bids_and_pool is None or bids_and_pool == {}:
+                    continue
+                
+                bids = bids_and_pool.get("bids", {})
+                pool = bids_and_pool.get("pool", 0)
+
+            except Exception as e:
+                print("error in receive_json:", e)
+                continue
                         
-            for auction_id, gold in bids.items():
-                auction_house.register_bid(a_id, auction_id, gold)       
+            try:
+                if pool > 0:
+                    auction_house.register_pool_buy(a_id, pool)
+
+                for auction_id, gold in bids.items():
+                    auction_house.register_bid(a_id, auction_id, gold)
+
+            except Exception as e:
+                print("error in receive_json:", e)
+                continue
 
         await websocket.close()
             
@@ -140,6 +189,7 @@ async def websocket_endpoint_runner(websocket: WebSocket, play_token: str):
         return
 
     
+    auction_house.assign_priorities()
     auction_house.is_active = True
     print("<started game>")
 
@@ -148,6 +198,22 @@ async def websocket_endpoint_runner(websocket: WebSocket, play_token: str):
     except:
         print("game not started due to error.")
         
+
+@app.get("/reset/{play_token}")
+async def reset_server(play_token: str):
+    print("reset_server - PLAY TOKEN:", play_token)
+    if play_token != auction_house.play_token:
+        return {"ok": False, "error": "wrong play token"}
+
+    # Disconnect any existing clients and reset state
+    try:
+        await connection_manager.disconnect_all()
+    except Exception as e:
+        print("error in disconnect_all during reset:", e)
+
+    auction_house.reset()
+    print("<server reset>")
+    return {"ok": True}
 
 @app.get("/")
 async def get():    
@@ -172,7 +238,7 @@ async def get():
                 grade = "B"
             elif rank > 0.60:
                 grade = "C"
-            elif rank > 0.45:
+            elif rank > 0.40:
                 grade = "D"
             else:
                 grade = "E"

@@ -13,7 +13,7 @@ from dnd_auction_game import AuctionGameClient
 ############################################################################################
     
 
-def random_single_bid(agent_id:str, states:dict, auctions:dict, prev_auctions:dict):
+def random_single_bid(agent_id:str, states:dict, auctions:dict, prev_auctions:dict, pool_gold:int, prev_pool_buys:dict):
     agent_state = states[agent_id]
     
     # get the gold amount of the wealthiest agent (that is not ourself)
@@ -35,7 +35,8 @@ def random_single_bid(agent_id:str, states:dict, auctions:dict, prev_auctions:di
         
         bids[target_auction_id] = bid_amount
 
-    return bids
+    points_for_pool = 0
+    return {"bids": bids, "pool": points_for_pool}
 
 
 

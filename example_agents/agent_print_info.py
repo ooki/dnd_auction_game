@@ -23,7 +23,7 @@ average_roll_for_die = {  # there is a more math'y way to do this. Left as an ex
             20: 10.5
         }
 
-def print_info(agent_id:str, states:dict, auctions:dict, prev_auctions:dict):
+def print_info(agent_id:str, states:dict, auctions:dict, prev_auctions:dict, pool_gold:int, prev_pool_buys:dict):
     agent_state = states[agent_id]
     current_gold = agent_state["gold"]
     current_points = agent_state["points"]
@@ -31,10 +31,16 @@ def print_info(agent_id:str, states:dict, auctions:dict, prev_auctions:dict):
     print("=============== NEW ROUND ===============")
     print("Current gold: {}".format(current_gold))
     print("Current points: {}".format(current_points))
+    print("Current amount gold in pool: {}".format(pool_gold))
     print()
 
-    # Calculate the mean gold/points for the other players.
+    # prev pool buys
+    if len(prev_pool_buys) > 0:
+        print(" - Previous Round Pool Buys -")
+        for a_id, points in prev_pool_buys.items():
+            print("Agent: {}  points: {}".format(a_id, points))
 
+    # Calculate the mean gold/points for the other players.
     gold = []
     points = []
     for other_agent_id, state in states.items():
