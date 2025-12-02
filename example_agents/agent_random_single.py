@@ -1,5 +1,6 @@
 import random
-import os 
+import os
+from re import I 
 
 from dnd_auction_game import AuctionGameClient
 
@@ -30,7 +31,7 @@ def random_single_bid(agent_id: str,
         if a_id != agent_id:
             if other_agent["gold"] > max_gold:
                 max_gold = other_agent["gold"]
-                    
+        
         
     bids = {}
     if agent_state["gold"] > 0:           

@@ -94,10 +94,12 @@ class AuctionHouse:
         self.gold_income = 1000
 
         self.gold_in_pool = 0 # the gold that was removed during the cashback
-        self.convert_to_pool_fraction = 0.8 # the fraction of gold that is returned to the hoard
+        self.convert_to_pool_fraction = 0.9 # the fraction of gold that is returned to the hoard
         
         self.agents = {}
         self.names = {}
+        self.points_gain_history = {}
+        self._prev_points = {}
         
         self.bank_interest_rate = 1.1
         self.auctions_per_agent = 1.5
@@ -159,6 +161,8 @@ class AuctionHouse:
         self.is_active = False
         self.agents = {}
         self.names = {}
+        self.points_gain_history = {}
+        self._prev_points = {}
         self.current_auctions = {}
         self.current_rolls = {} 
         self.current_bids = defaultdict(list)
@@ -197,6 +201,8 @@ class AuctionHouse:
                     
         self.agents[a_id] = {"gold": 0, "points": 0}
         self.names[a_id] = name
+        self.points_gain_history.setdefault(a_id, [])
+        self._prev_points.setdefault(a_id, 0)
     
     
     def prepare_auctions_and_pool(self):        
@@ -227,7 +233,7 @@ class AuctionHouse:
             else:
                 interest_available_gold = agent["gold"]
 
-            agent["gold"] += int(interest_available_gold * interest_rate)
+            agent["gold"] += int(interest_available_gold * (interest_rate - 1))
             agent["gold"] += gold_income
                 
                 
@@ -247,9 +253,9 @@ class AuctionHouse:
             "prev_auctions": out_prev_state,
             "prev_pool_buys": buy_pool_copy,
             "pool": self.gold_in_pool,
-            "remainder_gold_income": self.gold_income_per_round[self.round_counter+1:], # +1 as we want to report on the next state - not the current state
-            "remainder_bank_limit": self.bank_limit_per_round[self.round_counter+1:],
-            "remainder_bank_interest": self.bank_interest_per_round[self.round_counter+1:],
+            "remainder_gold_income": self.gold_income_per_round[self.round_counter:],
+            "remainder_bank_limit": self.bank_limit_per_round[self.round_counter:],
+            "remainder_bank_interest": self.bank_interest_per_round[self.round_counter:],
         }
 
         if self.save_logs and self.log_file is not None:
@@ -260,6 +266,19 @@ class AuctionHouse:
                 print("error writing auction log:", e)
                 self.save_logs = False
         
+        for a_id, info in self.agents.items():
+            current_points = info.get("points", 0)
+            prev_points = self._prev_points.get(a_id, 0)
+            gain = current_points - prev_points
+            history = self.points_gain_history.get(a_id)
+            if history is None:
+                history = []
+            history.append(gain)
+            if len(history) > 100:
+                history = history[-100:]
+            self.points_gain_history[a_id] = history
+            self._prev_points[a_id] = current_points
+
         self.round_counter += 1
         return state
         
@@ -290,6 +309,9 @@ class AuctionHouse:
         return auctions, rolls
 
     def register_pool_buy(self, a_id:str, points:int):
+        if a_id not in self.agents:
+            return
+        
         points = int(max(points, 0))
 
         self.current_pool_buys[a_id] = points
@@ -308,7 +330,7 @@ class AuctionHouse:
             fraction = points / total_amount
             gold_return = int(self.gold_in_pool * fraction)
             if points > 0:
-                gold_return = min(1, gold_return)
+                gold_return = max(1, gold_return)
 
             self.agents[a_id]["gold"] += gold_return
 
@@ -316,6 +338,9 @@ class AuctionHouse:
 
     def register_bid(self, a_id:str, auction_id:str, gold:int):       
         if auction_id not in self.current_auctions:
+            return
+        
+        if a_id not in self.agents:
             return
 
         gold = int(gold)
@@ -353,6 +378,8 @@ class AuctionHouse:
                     pl = self.priority.get(swap_with, 0)
                     self.priority[winner] = pl
                     self.priority[swap_with] = pw
+
+            # update now that we know the winners
             for a_id, bid in bids:
                 if a_id == winner and bid == win_amount:
                     self.agents[a_id]["points"] += points

@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dnd_auction_game"
+version = "0.4.1"
+description = "An auction game for trading-bots based on d&d die rolls."
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [
+  { name = "Sondre 'Ooki' Glimsdal", email = "sondre.glimsdal@gmail.com" },
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python",
+  "Topic :: Scientific/Engineering",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: POSIX",
+  "Operating System :: Unix",
+  "Operating System :: MacOS",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+]
+
+dependencies = [
+  "py-machineid>=0.4.5",
+  "fastapi",
+  "uvicorn",
+  "websockets",
+  "Jinja2",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/ooki/dnd_auction_game"
+"Bug Tracker" = "https://github.com/ooki/dnd_auction_game/issues"
+"Documentation" = "https://github.com/ooki/dnd_auction_game"
+"Source Code" = "https://github.com/ooki/dnd_auction_game"
+
+[tool.setuptools]
+zip-safe = false
+
+[tool.setuptools.packages.find]
+include = ["dnd_auction_game", "dnd_auction_game.templates"]
+
+[tool.setuptools.package-data]
+dnd_auction_game = ["templates/*.html"]

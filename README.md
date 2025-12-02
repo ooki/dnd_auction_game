@@ -2,13 +2,13 @@
 
 # In this game, your goal is to score as many points as possible by participating in auctions.
 
-Every round, each player gets 1000 gold to use in these auctions. At the beginning of each round, you'll see a set number of auctions, and you need to submit your bids in the form of a dictionary (you can choose not to bid as well).
+Every round, each player receives gold income (starts at ~1000, varies each round via random walk). At the beginning of each round, you'll see a set of auctions, and you submit your bids as a dictionary (you can choose not to bid).
 
-The server will reward the auctions to the highest bidders (there can be multiple winners if there's a tie), and the winning player will earn points based on a random dice roll.
+The server awards each auction to the highest bidder. In case of a tie, priority determines the winner (priority swaps after ties to keep things fair). The winning player earns points based on a random dice roll.
 
-If you don't win an auction, you'll get back 60% of the gold you bid. The exact number of points you receive from an auction is determined by rolling dice, so it's a bit unpredictable.
+If you don't win an auction, you get back 50% of the gold you bid. The remaining 50% goes into a shared gold pool that players can claim by spending points.
 
-In addition, the gold you have after bidding is increased with a 10% interest rate, thanks to the Iron Bank of Braavos.
+In addition, the Iron Bank of Braavos pays interest on your gold holdings (up to a limit). The interest rate, bank limit, and gold income all vary each round via random walks—use `bank_state` to see future values and plan ahead.
 
 To pass, according to Gandalf, you must obtain at least 10 points.
 
@@ -46,18 +46,102 @@ See the folder example_agents (on github) for examples on how to create a agent.
     agent_random_walk.py
     agent_random_single.py
 
+## Running multiple example agents
+
+To quickly spin up several example agents in parallel, use the helper script in `example_agents`:
+
+- `example_agents/run_multi_agents.py`
+
+This script:
+
+- Discovers all `agent_*.py` files in `example_agents`.
+- Randomly picks N of them (with replacement if N is larger than the number of files).
+- Starts each chosen agent as its own OS process from a single controller process.
+
+Example usage from the project root:
+
+```bash
+python example_agents/run_multi_agents.py --num 6
+```
+
+Short form:
+
+```bash
+python example_agents/run_multi_agents.py -n 6
+```
+
+You can also pass extra arguments to all agents by putting them after `--`:
+
+```bash
+python example_agents/run_multi_agents.py -n 6 -- --some-arg value
+```
+
 NOTE: If playing on a non-local server the agent must set the host&port in the file.
 
-In general you must implement a make_bid() function that takes the following parameters (see agent_print_info.py for how to parse this info):
+## Implementing Your Agent
 
-* @agent_id:str - a string that is the agent id of the current agent.
-* @states:dict - a dict of all agents, key: agent_id, value is a dict:{"gold": agents_gold, "points": agents points}
-* @auctions:dict - a dict of the auctions in the current round, key: auction_id, value is a dict:{"die": size of the die: 2,3,4,6,8,10,12 or 20,"num": the number of dices to be thrown,
-  "bonus": a flat sum to be added.}This can be read as D&D style throw, example: 3d6+7would be: {"die": 6, "num": 3, "bonus": 7}.
-* @prev_auctions:dict - a dict of the previous round. similar to
-  @auctions, but also contains the "reward" field that tells how many
-  the winner of the auction gained. In addition it contain a "bids" key
-  that gives a list of the bids for this particular auction, sorted so that the winning bid is always the first in the list.
+You must implement a `make_bid()` function that takes the following parameters (see `agent_print_info.py` for a complete example):
+
+```python
+def make_bid(agent_id: str,
+             round: int,
+             states: dict,
+             auctions: dict,
+             prev_auctions: dict,
+             pool: int,
+             prev_pool_buys: dict,
+             bank_state: dict) -> dict:
+```
+
+### Parameters
+
+- **`agent_id`** (`str`): Your agent's unique identifier.
+
+- **`round`** (`int`): The current round number.
+
+- **`states`** (`dict`): All agents' current state. Key: `agent_id`, Value: `{"gold": int, "points": int}`.
+  - Access your own state: `states[agent_id]`
+  - Iterate over opponents by skipping your own `agent_id`.
+
+- **`auctions`** (`dict`): Auctions available this round. Key: `auction_id`, Value: `{"die": int, "num": int, "bonus": int}`.
+  - `die`: Size of the die (2, 3, 4, 6, 8, 10, 12, or 20).
+  - `num`: Number of dice to roll.
+  - `bonus`: Flat value added to the roll.
+  - Example: `{"die": 6, "num": 3, "bonus": 7}` represents `3d6+7` (roll 3 six-sided dice and add 7).
+  - Expected value: `(die + 1) / 2 * num + bonus`.
+
+- **`prev_auctions`** (`dict`): Results from the previous round. Key: `auction_id`, Value includes:
+  - `die`, `num`, `bonus`: Same as `auctions`.
+  - `reward`: The actual points the winner received (dice roll result).
+  - `bids`: List of bids sorted by amount (highest first). Each bid: `{"a_id": str, "gold": int}`.
+  - The first entry in `bids` is always the winning bid.
+
+- **`pool`** (`int`): Current gold in the pool. Players can spend points to claim a share of this gold.
+
+- **`prev_pool_buys`** (`dict`): Pool purchases from the previous round. Key: `agent_id`, Value: points spent.
+
+- **`bank_state`** (`dict`): Bank parameters from current round to end of game:
+  - `gold_income_per_round`: List of gold income values. Index 0 is the current round.
+  - `bank_interest_per_round`: List of interest rates. Index 0 is the current round.
+  - `bank_limit_per_round`: List of bank limits (max gold that earns interest). Index 0 is the current round.
+  - Example: On round 5 of a 10-round game, each list has 5 elements (rounds 5–9).
+
+### Return Value
+
+Return a dictionary with your bids and optional pool purchase:
+
+```python
+{
+    "bids": {
+        "auction_id_1": gold_amount,
+        "auction_id_2": gold_amount,
+        # ... bid on as many auctions as you want
+    },
+    "pool": points_to_spend  # optional, spend points to claim pool gold
+}
+```
+
+Return an empty dict `{}` to skip bidding for the round.
 
 # Play the Game
 

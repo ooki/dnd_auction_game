@@ -46,6 +46,8 @@ def print_info(agent_id: str,
     sum_remainder_gold_income = sum(bank_state["gold_income_per_round"])
     mean_remainder_interest_rate = sum(bank_state["bank_interest_per_round"]) / max(1, len(bank_state["bank_interest_per_round"]))
     mean_remainder_bank_limit = sum(bank_state["bank_limit_per_round"]) / max(1, len(bank_state["bank_limit_per_round"]))
+    
+    print("LIST LEN:", len(bank_state["gold_income_per_round"]))
 
     if sum_remainder_gold_income > 0:
         print("Next round we will get {} gold, max bank limit is: {} and interest rate is: {}".format(bank_state["gold_income_per_round"][0], bank_state["bank_limit_per_round"][0], bank_state["bank_interest_per_round"][0]))

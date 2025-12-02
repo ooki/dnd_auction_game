@@ -6,7 +6,7 @@ this_directory = Path(__file__).parent
 long_description = (this_directory / "README.md").read_text()
 
 
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 setup(
     name="dnd_auction_game",
@@ -41,6 +41,10 @@ setup(
     zip_safe=False,
     python_requires=">=3.8",
     packages=['dnd_auction_game'],
+    package_data={
+        'dnd_auction_game': ['templates/*.html'],
+    },
+    include_package_data=True,
     install_requires=[
           'py-machineid>=0.4.5',
           'fastapi',

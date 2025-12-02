@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DND Auction Exchange - Live</title>
+    <style>
+        :root {
+            --bg-main: #050814;
+            --bg-panel: #0b1020;
+            --bg-header: #060a18;
+            --accent-blue: #34b3ff;
+            --accent-green: #24e39a;
+            --accent-red: #ff3b6e;
+            --accent-gold: #f5c542;
+            --text-main: #e5ecff;
+            --text-muted: #7d8bb3;
+            --row-border: #171d32;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: radial-gradient(circle at top, #141b35 0, #050814 55%, #02030a 100%);
+            color: var(--text-main);
+        }
+        .exchange-shell { min-height: 100vh; display: flex; flex-direction: column; }
+        .exchange-header {
+            background: linear-gradient(90deg, #050814 0, #08142c 40%, #041021 100%);
+            border-bottom: 1px solid #1b2340;
+            box-shadow: 0 0 18px rgba(0,0,0,0.7);
+            padding: 14px 32px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .exchange-logo {
+            display: flex; align-items: center; gap: 10px;
+            letter-spacing: 0.18em; text-transform: uppercase;
+            font-weight: 700; font-size: 14px;
+        }
+        .logo-mark {
+            width: 26px; height: 26px; border-radius: 6px;
+            background: radial-gradient(circle at 30% 20%, #ffffff 0, #34b3ff 18%, #24e39a 40%, rgba(0,0,0,0.7) 100%);
+            box-shadow: 0 0 18px rgba(52,179,255,0.7);
+            position: relative; overflow: hidden;
+        }
+        .logo-mark::after {
+            content: ""; position: absolute; inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.3), transparent 40%, transparent 60%, rgba(255,255,255,0.1));
+            mix-blend-mode: screen;
+        }
+        .exchange-logo span { color: var(--text-main); }
+        .exchange-logo span:nth-child(2) { color: var(--accent-blue); }
+        .exchange-logo span:nth-child(3) { color: var(--accent-green); }
+        .exchange-meta { display: flex; align-items: baseline; gap: 18px; font-size: 13px; color: var(--text-muted); }
+        .meta-label { text-transform: uppercase; letter-spacing: .16em; font-size: 11px; color: #5f6a94; }
+        .meta-value-main { font-weight: 600; color: var(--accent-gold); }
+        .meta-pill {
+            padding: 3px 9px; border-radius: 999px;
+            border: 1px solid #273150; background: rgba(12,20,45,0.9);
+        }
+        .exchange-main { flex: 1; padding: 16px 32px 32px; }
+        .ticker-strip {
+            margin: 0 auto 18px auto; max-width: 1200px; border-radius: 999px;
+            background: radial-gradient(circle at 0 50%, rgba(52,179,255,0.25), transparent 55%),
+                        radial-gradient(circle at 100% 50%, rgba(36,227,154,0.25), transparent 55%),
+                        #050815;
+            border: 1px solid rgba(46,68,122,0.9);
+            box-shadow: 0 0 25px rgba(0,0,0,0.7);
+            padding: 8px 18px; display: flex; align-items: center; gap: 16px; overflow: hidden;
+            position: relative;
+        }
+        .ticker-label {
+            font-size: 11px; text-transform: uppercase; letter-spacing: .18em; color: #7a86b3;
+            white-space: nowrap; position: relative; z-index: 2;
+        }
+        .ticker-track {
+            display: flex; white-space: nowrap; font-size: 13px;
+            animation: tickerScroll 32s linear infinite; position: relative; z-index: 1; flex: 1;
+        }
+        .ticker-seq { display: flex; gap: 22px; }
+        .ticker-item { display: flex; align-items: baseline; gap: 6px; }
+        .ticker-symbol { font-weight: 600; color: var(--text-main); }
+        .ticker-value {
+            color: var(--accent-gold);
+            white-space: pre;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        }
+        .board-panel {
+            max-width: 1200px; margin: 0 auto;
+            background: radial-gradient(circle at top, rgba(52,179,255,0.13), transparent 55%), #050814;
+            border-radius: 18px; border: 1px solid #181f36;
+            box-shadow: 0 26px 60px rgba(0,0,0,0.9); overflow: hidden;
+        }
+        .board-header {
+            display: flex; justify-content: space-between; align-items: baseline;
+            padding: 16px 20px 10px; border-bottom: 1px solid #171d32;
+            background: linear-gradient(180deg, rgba(8,19,48,0.95), rgba(5,9,22,0.98));
+        }
+        .board-title { display: flex; flex-direction: column; gap: 4px; }
+        .board-title-main { font-size: 18px; letter-spacing: 0.12em; text-transform: uppercase; }
+        .board-title-main span { color: var(--accent-blue); }
+        .board-subtitle { font-size: 12px; color: var(--text-muted); }
+        .board-status { display: flex; align-items: center; gap: 12px; font-size: 12px; }
+        .status-pill {
+            padding: 4px 10px; border-radius: 999px; display: inline-flex;
+            align-items: center; gap: 6px; font-weight: 500;
+            border: 1px solid #28345b;
+            background: radial-gradient(circle at 0 0, rgba(36,227,154,0.35), transparent 55%), #050814;
+        }
+        .status-dot { width: 8px; height: 8px; border-radius: 999px; background: var(--accent-green); box-shadow: 0 0 10px rgba(36,227,154,0.9); }
+        .status-dot-closed { background: var(--accent-red); box-shadow: 0 0 10px rgba(255,59,110,0.9); }
+        .board-status-note { color: var(--text-muted); }
+        .table-wrapper { overflow-x: auto; max-height: 70vh; overflow-y: auto; }
+        thead { position: sticky; top: 0; z-index: 10; }
+        table { width: 100%; border-collapse: collapse; color: var(--text-main); background: rgba(5,9,22,0.98); }
+        thead { background: linear-gradient(180deg, rgba(19,30,69,0.95), rgba(11,17,38,0.98)); }
+        th, td { padding: 10px 14px; text-align: left; font-size: 13px; }
+        th {
+            font-weight: 500; text-transform: uppercase; letter-spacing: 0.14em;
+            color: var(--text-muted); border-bottom: 1px solid #232b47;
+        }
+        tbody tr { border-bottom: 1px solid var(--row-border); }
+        tbody tr:last-child { border-bottom: none; }
+        tbody tr:nth-child(odd) { background: rgba(7,11,27,0.98); }
+        tbody tr:nth-child(even) { background: rgba(9,14,33,0.98); }
+        tbody tr:hover { background: rgba(18,40,92,0.95); box-shadow: inset 0 0 0 1px rgba(52,179,255,0.35); }
+        .col-rank { width: 72px; font-variant-numeric: tabular-nums; color: var(--text-muted); }
+        .col-name { min-width: 180px; }
+        .col-grade { width: 110px; }
+        .col-gold, .col-points { width: 120px; text-align: right; font-variant-numeric: tabular-nums; }
+        .pill-grade {
+            display: inline-flex; align-items: center; justify-content: center;
+            min-width: 38px; padding: 3px 10px; border-radius: 999px;
+            font-size: 11px; font-weight: 700; letter-spacing: 0.12em;
+            text-transform: uppercase; border: 1px solid rgba(255,255,255,0.06);
+        }
+        .grade-A { background: linear-gradient(135deg, #193f1e, #2a7e3c); color: #dfffe9; }
+        .grade-B { background: linear-gradient(135deg, #17341f, #2b6f3e); color: #e4ffe5; }
+        .grade-C { background: linear-gradient(135deg, #473b1a, #a17a1d); color: #fff4d6; }
+        .grade-D { background: linear-gradient(135deg, #4b2c1a, #b3541d); color: #ffe5d6; }
+        .grade-E { background: linear-gradient(135deg, #4b231f, #b73b23); color: #ffe1dd; }
+        .grade-F { background: linear-gradient(135deg, #3b1518, #94161a); color: #ffd6da; }
+        .name-cell-main { font-weight: 500; }
+        .rank-cell-main { font-weight: 600; color: var(--accent-blue); display: flex; align-items: center; gap: 4px; }
+        .rank-arrow { font-size: 11px; }
+        .rank-arrow-up { color: var(--accent-green); }
+        .rank-arrow-down { color: var(--accent-red); }
+        .rank-1 .rank-cell-main { color: var(--accent-gold); }
+        .rank-1 { box-shadow: inset 2px 0 0 rgba(245,197,66,0.9); }
+        .rank-2 { box-shadow: inset 2px 0 0 rgba(52,179,255,0.7); }
+        .rank-3 { box-shadow: inset 2px 0 0 rgba(36,227,154,0.7); }
+        .points-positive { color: var(--accent-green); font-weight: 600; }
+        .points-neutral { color: var(--text-main); }
+        .points-main { display: block; }
+        .points-avg { font-size: 11px; color: var(--text-muted); }
+        .points-avg-positive { color: var(--accent-green); }
+        .points-avg-negative { color: var(--accent-red); }
+        /* Sparkline styles */
+        .sparkline-cell { width: 100px; padding: 6px 10px; }
+        .sparkline-svg { display: block; width: 80px; height: 24px; }
+        .sparkline-line { fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+        .sparkline-positive { stroke: var(--accent-green); }
+        .sparkline-negative { stroke: var(--accent-red); }
+        .sparkline-neutral { stroke: var(--text-muted); }
+        .sparkline-area { opacity: 0.15; }
+        .sparkline-area-positive { fill: var(--accent-green); }
+        .sparkline-area-negative { fill: var(--accent-red); }
+        .sparkline-area-neutral { fill: var(--text-muted); }
+        /* Volume bar styles */
+        .volume-cell { width: 180px; padding: 8px 12px; }
+        .volume-bar-container {
+            width: 100%; height: 6px; background: rgba(255,255,255,0.12);
+            border-radius: 3px; overflow: hidden; position: relative;
+        }
+        .volume-bar {
+            height: 100%; border-radius: 3px;
+            background: var(--accent-blue);
+            transition: width 0.3s ease;
+            min-width: 2px;
+        }
+        .volume-label { 
+            font-size: 11px; color: var(--text-muted); margin-top: 4px; 
+            font-variant-numeric: tabular-nums; 
+            display: flex; justify-content: space-between;
+        }
+        .volume-pct { color: var(--accent-green); font-weight: 600; }
+        /* Ticker change badge styles */
+        .ticker-change {
+            font-size: 10px; padding: 1px 5px; border-radius: 3px; margin-left: 4px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+        .ticker-change-positive { background: rgba(36,227,154,0.2); color: var(--accent-green); }
+        .ticker-change-negative { background: rgba(255,59,110,0.2); color: var(--accent-red); }
+        .ticker-change-neutral { background: rgba(125,139,179,0.2); color: var(--text-muted); }
+        .board-footer {
+            padding: 10px 20px 14px; display: flex; justify-content: space-between;
+            align-items: center; font-size: 11px; color: var(--text-muted);
+            border-top: 1px solid #171d32;
+            background: radial-gradient(circle at 100% 0, rgba(52,179,255,0.18), transparent 55%), #050814;
+        }
+        .footer-left span { text-transform: uppercase; letter-spacing: .18em; }
+        .footer-right { display: flex; gap: 16px; }
+        .footer-dot { width: 6px; height: 6px; border-radius: 999px; background: #3b4364; box-shadow: 0 0 4px rgba(0,0,0,0.7); }
+        @keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+        @media (max-width: 768px) {
+            .exchange-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+            .exchange-main { padding: 12px 12px 24px; }
+            .board-panel { border-radius: 12px; }
+            th, td { padding: 8px 10px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="exchange-shell">
+        <header class="exchange-header">
+            <div class="exchange-logo">
+                <div class="logo-mark"></div>
+                <span>DND</span>
+                <span>AUCTION</span>
+                <span>EXCHANGE</span>
+            </div>
+            <div class="exchange-meta">
+                <div>
+                    <div class="meta-label">Session</div>
+                    <div>
+                        <span class="meta-value-main" id="session-status">{% if is_done is true %}Closed{% else %}Live Trading{% endif %}</span>
+                    </div>
+                </div>
+                <div>
+                    <div class="meta-label">Round</div>
+                    <div class="meta-pill" id="round-pill">
+                        {% if is_done is true %}Final &bull; {{ round }}{% else %}{{ round }}{% endif %}
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="exchange-main">
+            <section class="ticker-strip">
+                <div class="ticker-label"></div>
+                <div class="ticker-track">
+                    <div class="ticker-seq">
+                        <div class="ticker-item">
+                            <span class="ticker-symbol">GOLD.INCOME</span>
+                            <span class="ticker-value" data-ticker="gold-income">{{ "%05d" % gold_income }}</span>
+                            <span class="ticker-change ticker-change-neutral" data-ticker-change="gold-income">20R: 0.0%</span>
+                        </div>
+                        <div class="ticker-item">
+                            <span class="ticker-symbol">BANK.LIMIT</span>
+                            <span class="ticker-value" data-ticker="gold-limit">{{ "%05d" % gold_limit }}</span>
+                            <span class="ticker-change ticker-change-neutral" data-ticker-change="gold-limit">20R: 0.0%</span>
+                        </div>
+                        <div class="ticker-item">
+                            <span class="ticker-symbol">INT.RATE</span>
+                            <span class="ticker-value" data-ticker="interest-rate">{{ "%05.2f" % interest_rate }}x</span>
+                            <span class="ticker-change ticker-change-neutral" data-ticker-change="interest-rate">20R: 0.0%</span>
+                        </div>
+                        <div class="ticker-item">
+                            <span class="ticker-symbol">POOL.GOLD</span>
+                            <span class="ticker-value" data-ticker="gold-in-pool">{{ "%06d" % gold_in_pool }}</span>
+                        </div>
+                        <div class="ticker-item">
+                            <span class="ticker-symbol">- DND.AUCTION -</span>
+                            <span class="ticker-value"></span>
+                        </div>
+                    </div>
+                    <div class="ticker-seq">
+                        <div class="ticker-item">
+                            <span class="ticker-symbol">GOLD.INCOME</span>
+                            <span class="ticker-value" data-ticker="gold-income">{{ "%05d" % gold_income }}</span>
+                            <span class="ticker-change ticker-change-neutral" data-ticker-change="gold-income">20R: 0.0%</span>
+                        </div>
+                        <div class="ticker-item">
+                            <span class="ticker-symbol">BANK.LIMIT</span>
+                            <span class="ticker-value" data-ticker="gold-limit">{{ "%05d" % gold_limit }}</span>
+                            <span class="ticker-change ticker-change-neutral" data-ticker-change="gold-limit">20R: 0.0%</span>
+                        </div>
+                        <div class="ticker-item">
+                            <span class="ticker-symbol">INT.RATE</span>
+                            <span class="ticker-value" data-ticker="interest-rate">{{ "%05.2f" % interest_rate }}x</span>
+                            <span class="ticker-change ticker-change-neutral" data-ticker-change="interest-rate">20R: 0.0%</span>
+                        </div>
+                        <div class="ticker-item">
+                            <span class="ticker-symbol">POOL.GOLD</span>
+                            <span class="ticker-value" data-ticker="gold-in-pool">{{ "%06d" % gold_in_pool }}</span>
+                        </div>
+                        <div class="ticker-item">
+                            <span class="ticker-symbol">- DND.AUCTION -</span>
+                            <span class="ticker-value"></span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="board-panel">
+                <header class="board-header">
+                    <div class="board-title">
+                        <div class="board-title-main">LEADERBOARD <span>POINTS INDEX</span></div>
+                        <div class="board-subtitle">Ranked performance of all trading agents on the DND Auction Exchange.</div>
+                    </div>
+                    <div class="board-status">
+                        <div class="status-pill">
+                            <span class="status-dot {% if is_done is true %}status-dot-closed{% endif %}" id="status-dot"></span>
+                            <span id="status-label">{% if is_done is true %}Market Closed{% else %}Live Session{% endif %}</span>
+                        </div>
+                        <div class="board-status-note" id="refresh-note">
+                            Auto-refresh {% if is_done is false %}enabled{% else %}disabled{% endif %}.
+                        </div>
+                    </div>
+                </header>
+
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="col-rank">Rank</th>
+                                <th class="col-name">Agent</th>
+                                <th class="col-grade">Tier</th>
+                                <th class="col-gold">Gold</th>
+                                <th class="volume-cell">Gold Depth</th>
+                                <th class="col-points">Points Index</th>
+                                <th class="sparkline-cell">20R Trend</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboard-body">
+                        {% for player in players|sort(attribute='points', reverse=True) %}
+                            <tr class="rank-{{ loop.index }}">
+                                <td class="col-rank rank-cell-main">
+                                    <span>{{ "%02d"|format(loop.index) }}</span>
+                                    {% if player.rank_move == 'up' %}
+                                        <span class="rank-arrow rank-arrow-up">▲</span>
+                                    {% elif player.rank_move == 'down' %}
+                                        <span class="rank-arrow rank-arrow-down">▼</span>
+                                    {% endif %}
+                                </td>
+                                <td class="col-name"><div class="name-cell-main">{{ player.name|e }}</div></td>
+                                <td class="col-grade"><span class="pill-grade grade-{{ player.grade|e }}">{{ player.grade|e }}</span></td>
+                                <td class="col-gold">{{ player.gold|e }}</td>
+                                <td class="volume-cell">
+                                    <div class="volume-bar-container">
+                                        <div class="volume-bar" style="width: 0%" data-gold="{{ player.gold }}"></div>
+                                    </div>
+                                    <div class="volume-label">{{ player.gold|e }} gp</div>
+                                </td>
+                                <td class="col-points {% if player.points > 0 %}points-positive{% else %}points-neutral{% endif %}">
+                                    <div class="points-main">{{ player.points|e }}</div>
+                                    {% set avg = player.avg_gain_10 %}
+                                    {% if avg is not none %}
+                                        <div class="points-avg{% if avg > 0 %} points-avg-positive{% elif avg < 0 %} points-avg-negative{% endif %}">
+                                            Δ10: {{ "%.1f"|format(avg) }}
+                                        </div>
+                                    {% endif %}
+                                </td>
+                                <td class="sparkline-cell">
+                                    <svg class="sparkline-svg" viewBox="0 0 80 24" preserveAspectRatio="none">
+                                        <path class="sparkline-area sparkline-area-neutral" d=""></path>
+                                        <path class="sparkline-line sparkline-neutral" d=""></path>
+                                    </svg>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <footer class="board-footer">
+                    <div class="footer-left">
+                        <span>DND auction exchange &bull; fantasy market simulation</span>
+                    </div>
+                    <div class="footer-right">
+                        <div class="footer-dot"></div>
+                        <div>All values quoted in gp (gold pieces).</div>
+                    </div>
+                </footer>
+            </section>
+        </main>
+    </div>
+
+    <script>
+    (function() {
+        const statusEl = document.getElementById('session-status');
+        const statusDot = document.getElementById('status-dot');
+        const statusLabel = document.getElementById('status-label');
+        const roundPill = document.getElementById('round-pill');
+        const refreshNote = document.getElementById('refresh-note');
+        const goldIncomeEls = document.querySelectorAll('[data-ticker="gold-income"]');
+        const goldLimitEls = document.querySelectorAll('[data-ticker="gold-limit"]');
+        const interestRateEls = document.querySelectorAll('[data-ticker="interest-rate"]');
+        const poolEls = document.querySelectorAll('[data-ticker="gold-in-pool"]');
+        const goldIncomeChangeEls = document.querySelectorAll('[data-ticker-change="gold-income"]');
+        const goldLimitChangeEls = document.querySelectorAll('[data-ticker-change="gold-limit"]');
+        const interestRateChangeEls = document.querySelectorAll('[data-ticker-change="interest-rate"]');
+        const tbody = document.getElementById('leaderboard-body');
+
+        function formatIntWidth(value, width) {
+            const n = Number.parseInt(value, 10) || 0;
+            const s = String(Math.max(0, n));
+            return s.padStart(width, '0');
+        }
+
+        function formatRateWidth(value, width) {
+            const v = Number(value) || 0;
+            const s = v.toFixed(2); // e.g. "1.05"
+            return s.padStart(width, '0') + 'x';
+        }
+
+        function formatChange(value) {
+            const v = Number(value) || 0;
+            const sign = v > 0 ? '+' : '';
+            return '20R: ' + sign + v.toFixed(1) + '%';
+        }
+
+        function getChangeClass(value) {
+            const v = Number(value) || 0;
+            if (v > 0) return 'ticker-change-positive';
+            if (v < 0) return 'ticker-change-negative';
+            return 'ticker-change-neutral';
+        }
+
+        function generateSparklinePath(data, width, height) {
+            if (!data || data.length < 2) return { line: '', area: '' };
+            const min = Math.min(...data);
+            const max = Math.max(...data);
+            const range = max - min || 1;
+            const stepX = width / (data.length - 1);
+            
+            let linePath = '';
+            let areaPath = '';
+            
+            data.forEach((val, i) => {
+                const x = i * stepX;
+                const y = height - ((val - min) / range) * (height - 4) - 2;
+                if (i === 0) {
+                    linePath += `M ${x} ${y}`;
+                    areaPath += `M ${x} ${height} L ${x} ${y}`;
+                } else {
+                    linePath += ` L ${x} ${y}`;
+                    areaPath += ` L ${x} ${y}`;
+                }
+            });
+            areaPath += ` L ${(data.length - 1) * stepX} ${height} Z`;
+            
+            return { line: linePath, area: areaPath };
+        }
+
+        function getSparklineClass(data) {
+            if (!data || data.length < 2) return 'neutral';
+            const first = data[0];
+            const last = data[data.length - 1];
+            if (last > first) return 'positive';
+            if (last < first) return 'negative';
+            return 'neutral';
+        }
+
+        function updateFromData(data) {
+            if (!data) return;
+            const isDone = data.is_done;
+            const round = data.round;
+            const bank = data.bank_state || {};
+
+            const goldIncome = bank.gold_income_per_round;
+            const interestRate = bank.bank_interest_per_round;
+            const goldLimit = bank.bank_limit_per_round;
+            const goldInPool = data.gold_in_pool;
+
+            if (statusEl) {
+                statusEl.textContent = isDone ? 'Closed' : 'Live Trading';
+            }
+            if (statusLabel) {
+                statusLabel.textContent = isDone ? 'Market Closed' : 'Live Session';
+            }
+            if (statusDot) {
+                if (isDone) {
+                    statusDot.classList.add('status-dot-closed');
+                } else {
+                    statusDot.classList.remove('status-dot-closed');
+                }
+            }
+            if (roundPill) {
+                roundPill.innerHTML = isDone ? ('Final &bull; ' + round) : String(round);
+            }
+            if (refreshNote) {
+                refreshNote.textContent = 'Auto-refresh ' + (isDone ? 'disabled.' : 'enabled.');
+            }
+            if (goldIncomeEls.length && goldIncome !== undefined) {
+                const txt = formatIntWidth(goldIncome, 5);
+                goldIncomeEls.forEach(el => { el.textContent = txt; });
+            }
+            if (goldLimitEls.length && goldLimit !== undefined) {
+                const txt = formatIntWidth(goldLimit, 5);
+                goldLimitEls.forEach(el => { el.textContent = txt; });
+            }
+            if (interestRateEls.length && interestRate !== undefined) {
+                const txt = formatRateWidth(interestRate, 5);
+                interestRateEls.forEach(el => { el.textContent = txt; });
+            }
+            if (poolEls.length && goldInPool !== undefined) {
+                const txt = formatIntWidth(goldInPool, 6);
+                poolEls.forEach(el => { el.textContent = txt; });
+            }
+
+            // Update 20-round change badges
+            const goldIncomeChange = data.gold_income_change;
+            const goldLimitChange = data.gold_limit_change;
+            const interestRateChange = data.interest_rate_change;
+
+            if (goldIncomeChangeEls.length && goldIncomeChange !== undefined) {
+                goldIncomeChangeEls.forEach(el => {
+                    el.textContent = formatChange(goldIncomeChange);
+                    el.className = 'ticker-change ' + getChangeClass(goldIncomeChange);
+                });
+            }
+            if (goldLimitChangeEls.length && goldLimitChange !== undefined) {
+                goldLimitChangeEls.forEach(el => {
+                    el.textContent = formatChange(goldLimitChange);
+                    el.className = 'ticker-change ' + getChangeClass(goldLimitChange);
+                });
+            }
+            if (interestRateChangeEls.length && interestRateChange !== undefined) {
+                interestRateChangeEls.forEach(el => {
+                    el.textContent = formatChange(interestRateChange);
+                    el.className = 'ticker-change ' + getChangeClass(interestRateChange);
+                });
+            }
+
+            if (tbody && Array.isArray(data.players)) {
+                const players = data.players.slice().sort((a, b) => (b.points || 0) - (a.points || 0));
+                const maxGold = data.max_gold || 1;
+                const minGold = data.min_gold || 0;
+                const goldRange = maxGold - minGold || 1;
+                tbody.innerHTML = '';
+                players.forEach((p, idx) => {
+                    const tr = document.createElement('tr');
+                    tr.className = 'rank-' + (idx + 1);
+
+                    const rankTd = document.createElement('td');
+                    rankTd.className = 'col-rank rank-cell-main';
+                    const rankSpan = document.createElement('span');
+                    rankSpan.textContent = String(idx + 1).padStart(2, '0');
+                    rankTd.appendChild(rankSpan);
+                    if (p.rank_move === 'up') {
+                        const up = document.createElement('span');
+                        up.className = 'rank-arrow rank-arrow-up';
+                        up.textContent = '▲';
+                        rankTd.appendChild(up);
+                    } else if (p.rank_move === 'down') {
+                        const down = document.createElement('span');
+                        down.className = 'rank-arrow rank-arrow-down';
+                        down.textContent = '▼';
+                        rankTd.appendChild(down);
+                    }
+
+                    const nameTd = document.createElement('td');
+                    nameTd.className = 'col-name';
+                    const nameDiv = document.createElement('div');
+                    nameDiv.className = 'name-cell-main';
+                    nameDiv.textContent = p.name || '';
+                    nameTd.appendChild(nameDiv);
+
+                    const gradeTd = document.createElement('td');
+                    gradeTd.className = 'col-grade';
+                    const gradeSpan = document.createElement('span');
+                    const grade = (p.grade || '').toString();
+                    gradeSpan.className = 'pill-grade grade-' + grade;
+                    gradeSpan.textContent = grade;
+                    gradeTd.appendChild(gradeSpan);
+
+                    const goldTd = document.createElement('td');
+                    goldTd.className = 'col-gold';
+                    goldTd.textContent = p.gold != null ? p.gold : '';
+
+                    // Volume bar cell
+                    const volumeTd = document.createElement('td');
+                    volumeTd.className = 'volume-cell';
+                    const volumeContainer = document.createElement('div');
+                    volumeContainer.className = 'volume-bar-container';
+                    const volumeBar = document.createElement('div');
+                    volumeBar.className = 'volume-bar';
+                    // Use relative scaling: 5% = min gold, 100% = max gold
+                    const playerGold = p.gold || 0;
+                    const goldPct = Math.min(100, Math.max(5, ((playerGold - minGold) / goldRange) * 100));
+                    volumeBar.style.width = goldPct + '%';
+                    volumeContainer.appendChild(volumeBar);
+                    volumeTd.appendChild(volumeContainer);
+                    const volumeLabel = document.createElement('div');
+                    volumeLabel.className = 'volume-label';
+                    const goldText = document.createElement('span');
+                    goldText.textContent = playerGold.toLocaleString() + ' gp';
+                    const pctText = document.createElement('span');
+                    pctText.className = 'volume-pct';
+                    pctText.textContent = Math.round(goldPct) + '%';
+                    volumeLabel.appendChild(goldText);
+                    volumeLabel.appendChild(pctText);
+                    volumeTd.appendChild(volumeLabel);
+
+                    const pointsTd = document.createElement('td');
+                    const pts = Number(p.points) || 0;
+                    pointsTd.className = 'col-points ' + (pts > 0 ? 'points-positive' : 'points-neutral');
+                    const ptsMain = document.createElement('div');
+                    ptsMain.className = 'points-main';
+                    ptsMain.textContent = pts;
+                    pointsTd.appendChild(ptsMain);
+
+                    if (typeof p.avg_gain_10 === 'number') {
+                        const avg = p.avg_gain_10;
+                        const avgDiv = document.createElement('div');
+                        let cls = 'points-avg';
+                        if (avg > 0) {
+                            cls += ' points-avg-positive';
+                        } else if (avg < 0) {
+                            cls += ' points-avg-negative';
+                        }
+                        avgDiv.className = cls;
+                        avgDiv.textContent = 'Δ10: ' + avg.toFixed(1);
+                        pointsTd.appendChild(avgDiv);
+                    }
+
+                    // Sparkline cell
+                    const sparkTd = document.createElement('td');
+                    sparkTd.className = 'sparkline-cell';
+                    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    svg.setAttribute('class', 'sparkline-svg');
+                    svg.setAttribute('viewBox', '0 0 80 24');
+                    svg.setAttribute('preserveAspectRatio', 'none');
+                    
+                    const sparkData = p.sparkline || [];
+                    const paths = generateSparklinePath(sparkData, 80, 24);
+                    const sparkClass = getSparklineClass(sparkData);
+                    
+                    const areaPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    areaPath.setAttribute('class', 'sparkline-area sparkline-area-' + sparkClass);
+                    areaPath.setAttribute('d', paths.area);
+                    svg.appendChild(areaPath);
+                    
+                    const linePath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    linePath.setAttribute('class', 'sparkline-line sparkline-' + sparkClass);
+                    linePath.setAttribute('d', paths.line);
+                    svg.appendChild(linePath);
+                    
+                    sparkTd.appendChild(svg);
+
+                    tr.appendChild(rankTd);
+                    tr.appendChild(nameTd);
+                    tr.appendChild(gradeTd);
+                    tr.appendChild(goldTd);
+                    tr.appendChild(volumeTd);
+                    tr.appendChild(pointsTd);
+                    tr.appendChild(sparkTd);
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        async function poll() {
+            try {
+                const res = await fetch('/api/leadboard', { cache: 'no-cache' });
+                if (!res.ok) return;
+                const data = await res.json();
+                updateFromData(data);
+                if (data && data.is_done) {
+                    if (window.__leadboardInterval) {
+                        clearInterval(window.__leadboardInterval);
+                        window.__leadboardInterval = null;
+                    }
+                }
+            } catch (e) {
+                // ignore network errors for this simple poller
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            window.__leadboardInterval = setInterval(poll, 1000);
+        });
+    })();
+    </script>
+</body>
+</html>
