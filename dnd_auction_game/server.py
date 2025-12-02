@@ -175,6 +175,8 @@ async def websocket_endpoint_runner(websocket: WebSocket, play_token: str):
 
         game_info = await websocket.receive_json()
         auction_house.num_rounds_in_game = int(game_info["num_rounds"])
+        auction_house.set_num_rounds(auction_house.num_rounds_in_game)
+
         print("starting game with {} rounds".format(auction_house.num_rounds_in_game))
 
         game_info = {
@@ -222,6 +224,19 @@ async def get():
         name = auction_house.names[a_id]        
         leadboard.append([name, info["points"], info["gold"]])
 
+
+    gold_income = 1000
+    interest_rate = 1.0
+    gold_limit = 2000
+    gold_in_pool = max(auction_house.gold_in_pool, 0)
+    
+    try:
+        gold_income = auction_house.gold_income_per_round[auction_house.round_counter]
+        interest_rate = auction_house.bank_interest_per_round[auction_house.round_counter]
+        gold_limit = auction_house.bank_limit_per_round[auction_house.round_counter]
+    except IndexError:
+            pass
+
     all_players = []
     leadboard.sort(key=lambda x:x[1], reverse=True)
     n_players = max(len(leadboard), 1)
@@ -248,6 +263,7 @@ async def get():
 
     return HTMLResponse(generate_leadboard(all_players,
                                            auction_house.round_counter,
-                                           auction_house.is_done))
+                                           auction_house.is_done,
+                                           bank_state={"gold_income_per_round": gold_income, "bank_interest_per_round": interest_rate, "bank_limit_per_round": gold_limit}, gold_in_pool=gold_in_pool))
 
 

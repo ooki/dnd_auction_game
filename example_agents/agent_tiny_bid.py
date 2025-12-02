@@ -1,6 +1,6 @@
 import random
 import os
-
+from typing import List
 from dnd_auction_game import AuctionGameClient
 
 
@@ -10,19 +10,29 @@ from dnd_auction_game import AuctionGameClient
 #   Bids a tiny amount on every auction
 #
 ############################################################################################
-    
 
-def tiny_bid(agent_id:str, states:dict, auctions:dict, prev_auctions:dict, pool_gold:int, prev_pool_buys:dict):
+
+
+
+def tiny_bid(agent_id: str,
+             round: int,
+             states: dict,
+             auctions: dict,
+             prev_auctions: dict,
+             pool: int,
+             prev_pool_buys: dict,
+             bank_state: dict):
+
     agent_state = states[agent_id]
     current_gold = agent_state["gold"]
 
-    print("Current pool size: {}".format(pool_gold))
+    print("Current pool size: {}".format(pool))
     
     bids = {}       
 
 
     for auction_id in auctions.keys():
-        bid = random.randint(1, 20)
+        bid = random.randint(1, 200)
         if bid < current_gold:
             bids[auction_id] = bid 
             current_gold -= bid

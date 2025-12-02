@@ -6,6 +6,81 @@ import json
 import math
 import os
 
+
+def generate_gold_random_walk(n_steps:int) -> List[float]:
+
+    gold_per_round = 1000
+    step_size = 150
+    max_gold_per_round = 3000
+
+    gold = [gold_per_round]
+    for i in range(n_steps-1):
+        next_gold = gold[-1] + random.randint(-step_size, step_size) - 1
+
+        if next_gold < 10:
+            next_gold = 10
+
+        if next_gold > max_gold_per_round:
+            next_gold = max_gold_per_round
+
+        gold.append(next_gold)
+
+        if i % 500 == 0:
+            gold[-1] = gold_per_round + random.randint(-step_size // 2, step_size)
+
+    return gold
+
+def braavos_bank_limit_random_walk(n_steps:int) -> List[int]:
+
+    upper_limit_start = 5000
+    upper_limit_end = 20000
+    step_size = 150
+
+    upper_limits = [upper_limit_start]
+    for i in range(n_steps-1):
+        next_limit = upper_limits[-1] + random.randint(-step_size, step_size)
+
+        if next_limit < 50:
+            next_limit = 50
+
+        if next_limit > upper_limit_end:
+            next_limit = upper_limit_end
+
+        upper_limits.append(next_limit)
+
+        if i % 300 == 0:
+            upper_limits[-1] = upper_limit_start
+
+    return upper_limits
+
+def braavos_bank_interest_rate_random_walk(n_steps:int) -> List[float]:
+
+    start_rate = 1.00
+    min_rate = 1.0
+    max_rate = 1.1
+    step_size = 0.02
+
+    rates = [start_rate]
+    for i in range(n_steps-1):
+        next_rate = rates[-1] + random.uniform(-step_size, step_size)
+
+        if next_rate < min_rate:
+            next_rate = min_rate
+
+        if next_rate > max_rate:
+            next_rate = max_rate
+
+        rates.append(next_rate)
+
+        if i % 250 == 0:
+            rates[-1] = start_rate + random.uniform(-step_size, step_size)
+
+
+    return rates
+
+
+
+
 class AuctionHouse:
     def __init__(self, game_token:str, play_token:str, save_logs=False):
         self.is_done = False
@@ -18,20 +93,20 @@ class AuctionHouse:
         self.save_logs = save_logs
         self.gold_income = 1000
 
-        self.gold_in_pool = 0 # the gold that was removed during the cashbacki
-        self.convert_to_pool_fraction = 0.7 # the fraction of gold that is returned to the hoard
+        self.gold_in_pool = 0 # the gold that was removed during the cashback
+        self.convert_to_pool_fraction = 0.8 # the fraction of gold that is returned to the hoard
         
         self.agents = {}
         self.names = {}
         
-        self.bank_interest_rate = 1.10
+        self.bank_interest_rate = 1.1
         self.auctions_per_agent = 1.5
-        self.gold_back_fraction = 0.6
+        self.gold_back_fraction = 0.5
         
         self.die_sizes = [2,   3,  4,  6,   8, 10,  12,   20,  20]
-        self.die_prob =  [8,   8,  9,  8,   6,  6,   5,    2,   1]
-        self.max_n_die = [5,   7, 10,  2,   3,  3,   6,    2,   4]
-        self.max_bonus = [10,  2, 16,  8,  21,  2,   5,    7,   3] 
+        self.die_prob =  [7,   8,  9,  8,   6,  6,   5,    2,   1]
+        self.max_n_die = [6,   7, 10,  2,   3,  3,   6,    2,   4]
+        self.max_bonus = [11,  2, 16,  8,  21,  2,   5,    7,   3] 
         self.min_bonus = [-2, -8, -5, -5, -10, -4,  -5,  -4,  -4]
 
         self.round_counter = 0
@@ -42,6 +117,12 @@ class AuctionHouse:
         self.num_rounds_in_game = 10
         self.priority = {}
         self.current_pool_buys = {}
+
+        self.num_rounds_in_game : int = None
+        self.gold_income_per_round : List[int] = None
+        self.bank_limit_per_round : List[int] = None
+        self.bank_interest_per_round : List[float] = None
+        self.set_num_rounds(10)
         
         # set the logfile
         self._find_log_file()
@@ -63,6 +144,16 @@ class AuctionHouse:
             self.log_file = f
             self.log_player_id_file = f_player_id
 
+
+
+    def set_num_rounds(self, num_rounds:int):
+        self.num_rounds_in_game = num_rounds
+
+        self.gold_income_per_round = generate_gold_random_walk(num_rounds)
+        self.bank_limit_per_round = braavos_bank_limit_random_walk(num_rounds)
+        self.bank_interest_per_round = braavos_bank_interest_rate_random_walk(num_rounds)
+
+
     def reset(self):
         self.is_done = False
         self.is_active = False
@@ -76,6 +167,7 @@ class AuctionHouse:
         self.num_rounds_in_game = 10
         self.priority = {}
         self.gold_in_pool = 0
+        self.set_num_rounds(10)
         self._find_log_file()
         
     
@@ -119,13 +211,24 @@ class AuctionHouse:
         buy_pool_copy = self.current_pool_buys.copy()
         self.current_pool_buys = {} 
 
+
+        # update gold for agents
+        upper_rate = self.bank_limit_per_round[self.round_counter]
+        interest_rate = self.bank_interest_per_round[self.round_counter]
+        gold_income = self.gold_income_per_round[self.round_counter]
         
         # update gold for agents
         for agent in self.agents.values():
 
             # bank of Braavos gives interest on stored gold
-            agent["gold"] = int(agent["gold"] * self.bank_interest_rate)
-            agent["gold"] += self.gold_income
+            interest_available_gold = 0
+            if agent["gold"] >= upper_rate:
+                interest_available_gold = upper_rate
+            else:
+                interest_available_gold = agent["gold"]
+
+            agent["gold"] += int(interest_available_gold * interest_rate)
+            agent["gold"] += gold_income
                 
                 
         out_prev_state = {}
@@ -144,6 +247,9 @@ class AuctionHouse:
             "prev_auctions": out_prev_state,
             "prev_pool_buys": buy_pool_copy,
             "pool": self.gold_in_pool,
+            "remainder_gold_income": self.gold_income_per_round[self.round_counter+1:], # +1 as we want to report on the next state - not the current state
+            "remainder_bank_limit": self.bank_limit_per_round[self.round_counter+1:],
+            "remainder_bank_interest": self.bank_interest_per_round[self.round_counter+1:],
         }
 
         if self.save_logs and self.log_file is not None:

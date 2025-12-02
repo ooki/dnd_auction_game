@@ -23,7 +23,15 @@ average_roll_for_die = {  # there is a more math'y way to do this. Left as an ex
             20: 10.5
         }
 
-def print_info(agent_id:str, states:dict, auctions:dict, prev_auctions:dict, pool_gold:int, prev_pool_buys:dict):
+def print_info(agent_id: str,
+             round: int,
+             states: dict,
+             auctions: dict,
+             prev_auctions: dict,
+             pool: int,
+             prev_pool_buys: dict,
+             bank_state: dict):
+
     agent_state = states[agent_id]
     current_gold = agent_state["gold"]
     current_points = agent_state["points"]
@@ -31,8 +39,24 @@ def print_info(agent_id:str, states:dict, auctions:dict, prev_auctions:dict, poo
     print("=============== NEW ROUND ===============")
     print("Current gold: {}".format(current_gold))
     print("Current points: {}".format(current_points))
-    print("Current amount gold in pool: {}".format(pool_gold))
+    print("Current amount gold in pool: {}".format(pool))
     print()
+
+    print(" - remainder -")
+    sum_remainder_gold_income = sum(bank_state["gold_income_per_round"])
+    mean_remainder_interest_rate = sum(bank_state["bank_interest_per_round"]) / max(1, len(bank_state["bank_interest_per_round"]))
+    mean_remainder_bank_limit = sum(bank_state["bank_limit_per_round"]) / max(1, len(bank_state["bank_limit_per_round"]))
+
+    if sum_remainder_gold_income > 0:
+        print("Next round we will get {} gold, max bank limit is: {} and interest rate is: {}".format(bank_state["gold_income_per_round"][0], bank_state["bank_limit_per_round"][0], bank_state["bank_interest_per_round"][0]))
+        print("Gold: {}".format(sum_remainder_gold_income))
+        print("Mean Interest: {:.2f}".format(mean_remainder_interest_rate))
+        print("Mean Bank Limit: {:.2f}".format(mean_remainder_bank_limit))
+
+    print("Looking into the future is possible by looking in the next rounds info:")
+    print(bank_state["gold_income_per_round"])
+    print(bank_state["bank_limit_per_round"])
+    print(bank_state["bank_interest_per_round"])
 
     # prev pool buys
     if len(prev_pool_buys) > 0:

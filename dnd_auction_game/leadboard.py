@@ -1,4 +1,3 @@
-
 import html
 from jinja2 import Template
 
@@ -55,6 +54,7 @@ jjinja_template = """
     {% else %}
     <h1>Scoreboard - Round {{ round }}</h1>
     {% endif %}
+    <b>Gold Income: {{ gold_income }} | Interest Rate: {{ "%.2f"|format(interest_rate) }} | Limit: {{gold_limit}} | Gold in Pool: {{gold_in_pool}}</b>
     <table>
         <thead>
             <tr>
@@ -83,51 +83,17 @@ jjinja_template = """
 """
 
 
-def generate_leadboard(players, round, is_done):
+def generate_leadboard(players, round, is_done, bank_state, gold_in_pool):
 
     template = Template(jjinja_template)
-    return template.render(players=players, round=round, is_done=is_done)
+    return template.render(players=players,
+                            round=round,
+        is_done=is_done,
+        gold_income=bank_state["gold_income_per_round"],
+        interest_rate=bank_state["bank_interest_per_round"],
+        gold_limit=bank_state["bank_limit_per_round"],
+        gold_in_pool=gold_in_pool)
 
 
-
-
-def generate_leadboard_old(leadboard, round, is_done):
-
-    do_refresh = """<meta http-equiv="refresh" content="1">"""
-    if is_done:
-        do_refresh = ""
-    html_head = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Leadboard - Auction Game</title>
-        {}
-    </head>
-    """.format(do_refresh)
-
-    h = ""
-    if is_done:
-        h = " - FINISHED GAME"
-    else:
-        h = "Round: {}".format(round)
-        
-    html_body_top = """
-    <body>
-        <h2>Leadboard {}</h2>        
-    """.format(h)
-    
-    html_body_bottom = """                
-    </body>    
-    </html>
-    """
-    board = []
-    for rank, (a_name, points, gold, grade) in enumerate(leadboard):
-        safe_name = html.escape(a_name)
-        if rank == 0:
-            board.append("<p>{}<b>#{} - {} : gold {} : points {}</b></p>".format(grade, rank+1, safe_name, gold, points))
-        else:
-            board.append("<p>{}#{} - {} : gold {} : <b>points {}</b></p>".format(grade, rank+1, safe_name, gold, points))
-        
-    return html_head + html_body_top + "\n".join(board) + html_body_bottom
 
 

@@ -67,12 +67,21 @@ class AuctionGameClient:
                     round_data["current_agent"] = self.agent_id
                     with open(self.log_file, "a") as fp:
                         fp.write("{}\n".format(json.dumps(round_data)))
+                        
+
+                    bank_state = {}
+                    bank_state["gold_income_per_round"] = round_data["remainder_gold_income"]
+                    bank_state["bank_interest_per_round"] = round_data["remainder_bank_interest"]
+                    bank_state["bank_limit_per_round"] = round_data["remainder_bank_limit"]
                     
-                    new_bids = bid_callback(self.agent_id, round_data["states"],
-                                                           round_data["auctions"],
-                                                           round_data["prev_auctions"],
-                                                           round_data["pool"],
-                                                           round_data["prev_pool_buys"])    
+                    new_bids = bid_callback(self.agent_id, 
+                                            round_data["round"],
+                                            round_data["states"],
+                                            round_data["auctions"],
+                                            round_data["prev_auctions"],
+                                            round_data["pool"],
+                                            round_data["prev_pool_buys"],
+                                            bank_state)    
 
                     await sock.send(json.dumps(new_bids))
         
