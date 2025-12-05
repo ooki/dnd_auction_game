@@ -218,10 +218,11 @@ class AuctionHouse:
         self.current_pool_buys = {} 
 
 
-        # update gold for agents
-        upper_rate = self.bank_limit_per_round[self.round_counter]
-        interest_rate = self.bank_interest_per_round[self.round_counter]
-        gold_income = self.gold_income_per_round[self.round_counter]
+        # update gold for agents - clamp round_counter to valid index
+        rc = min(self.round_counter, len(self.bank_limit_per_round) - 1)
+        upper_rate = self.bank_limit_per_round[rc]
+        interest_rate = self.bank_interest_per_round[rc]
+        gold_income = self.gold_income_per_round[rc]
         
         # update gold for agents
         for agent in self.agents.values():
@@ -312,7 +313,12 @@ class AuctionHouse:
         if a_id not in self.agents:
             return
         
-        points = int(max(points, 0))
+        try:
+            points = int(points)
+        except (TypeError, ValueError):
+            return
+        
+        points = max(points, 0)
 
         self.current_pool_buys[a_id] = points
             
@@ -343,7 +349,11 @@ class AuctionHouse:
         if a_id not in self.agents:
             return
 
-        gold = int(gold)
+        try:
+            gold = int(gold)
+        except (TypeError, ValueError):
+            return
+        
         if gold < 1:
             return
 

@@ -68,9 +68,11 @@ def _compute_leadboard_state():
 
     try:
         rc = auction_house.round_counter
-        gold_income = auction_house.gold_income_per_round[rc]
-        interest_rate = auction_house.bank_interest_per_round[rc]
-        gold_limit = auction_house.bank_limit_per_round[rc]
+        max_idx = len(auction_house.gold_income_per_round) - 1
+        rc_clamped = min(rc, max_idx) if max_idx >= 0 else 0
+        gold_income = auction_house.gold_income_per_round[rc_clamped]
+        interest_rate = auction_house.bank_interest_per_round[rc_clamped]
+        gold_limit = auction_house.bank_limit_per_round[rc_clamped]
         
         # Calculate 20-round change (compare current to 20 rounds ago)
         if rc >= 20:
@@ -318,11 +320,12 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
                 if pool > 0:
                     auction_house.register_pool_buy(a_id, pool)
 
-                for auction_id, gold in bids.items():
-                    auction_house.register_bid(a_id, auction_id, gold)
+                if isinstance(bids, dict):
+                    for auction_id, gold in bids.items():
+                        auction_house.register_bid(a_id, str(auction_id), gold)
 
             except Exception as e:
-                print("error in receive_json:", e)
+                print("error processing bids:", e)
                 continue
 
         await websocket.close()
