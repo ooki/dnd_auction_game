@@ -6,7 +6,7 @@ import os
 
 import machineid
 import websockets
-from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK
+from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK, InvalidHandshake
 
 
 class AuctionGameClient:
@@ -27,8 +27,10 @@ class AuctionGameClient:
         
         if self.host.lower() == "localhost" or self.host == "127.0.0.1":
             self.agent_id = "local_rand_id_{}".format(random.randint(100, 1000000))
+            self.agent_secret = machineid.hashed_id('auction-game-secret-{}'.format(self.agent_id))
         else:
             self.agent_id = machineid.hashed_id('auction-game')
+            self.agent_secret = machineid.hashed_id('auction-game-secret')
         
         if not os.path.isdir("logs"):            
             print("unable to find ./logs => creating dir.")
@@ -49,20 +51,22 @@ class AuctionGameClient:
         agent_info["name"] = self.agent_name
         agent_info["a_id"] = self.agent_id
         agent_info["player_id"] = self.player_id[0:128]
+        agent_info["secret"] = self.agent_secret
 
         connection_str = "ws://{}:{}/ws/{}".format(self.host, self.port, self.token)
-        print("connecting to: {}".format(connection_str))
+        print("connecting to: ws://{}:{}/ws/<token>".format(self.host, self.port))
 
+        rounds_received = 0
         try:
             async with websockets.connect(connection_str) as sock:
                 print("<connected to game server>")
-                agent_info_json = json.dumps(agent_info)
-                print(agent_info_json)
-                await sock.send(agent_info_json)
+                print(json.dumps({k: v for k, v in agent_info.items() if k != "secret"}))
+                await sock.send(json.dumps(agent_info))
                                 
                 while True:
                     round_data_raw = await sock.recv()
                     round_data = json.loads(round_data_raw)
+                    rounds_received += 1
                     
                     round_data["current_agent"] = self.agent_id
                     with open(self.log_file, "a") as fp:
@@ -79,17 +83,25 @@ class AuctionGameClient:
                                             round_data["states"],
                                             round_data["auctions"],
                                             round_data["prev_auctions"],
-                                            round_data["pool"],
-                                            round_data["prev_pool_buys"],
-                                            bank_state)    
+                                            round_data["gold_per_point"],
+                                            bank_state)
 
                     await sock.send(json.dumps(new_bids))
         
+        except InvalidHandshake as e:
+            print("<ERROR: server refused the connection ({}). Wrong game token?>".format(e))
+
+        except OSError as e:
+            print("<ERROR: could not reach server at {}:{} ({})>".format(self.host, self.port, e))
+
         except ConnectionClosedError:
-            print("<ERROR: Connection to server closed>")
+            print("<ERROR: Connection to server closed unexpectedly>")
         
         except ConnectionClosedOK:
-            pass
+            if rounds_received == 0:
+                print("<ERROR: server rejected this agent before the game started. "
+                      "Possible causes: the game is already running, the server is full, "
+                      "or another agent already uses this agent id with a different secret.>")
 
 
 

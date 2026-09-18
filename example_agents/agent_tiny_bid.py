@@ -19,14 +19,13 @@ def tiny_bid(agent_id: str,
              states: dict,
              auctions: dict,
              prev_auctions: dict,
-             pool: int,
-             prev_pool_buys: dict,
+             gold_per_point: float,
              bank_state: dict):
 
     agent_state = states[agent_id]
     current_gold = agent_state["gold"]
 
-    print("Current pool size: {}".format(pool))
+    print("Current gold per point: {:.2f}".format(gold_per_point))
     
     bids = {}       
 
@@ -38,9 +37,7 @@ def tiny_bid(agent_id: str,
             current_gold -= bid
 
 
-    # 
-    points_for_pool = 0
-    return {"bids": bids, "pool": points_for_pool}
+    return {"bids": bids, "points_to_spend": 0}
 
 
 

@@ -257,8 +257,8 @@
                             <span class="ticker-change ticker-change-neutral" data-ticker-change="interest-rate">20R: 0.0%</span>
                         </div>
                         <div class="ticker-item">
-                            <span class="ticker-symbol">POOL.GOLD</span>
-                            <span class="ticker-value" data-ticker="gold-in-pool">{{ "%06d" % gold_in_pool }}</span>
+                            <span class="ticker-symbol">GOLD / POINT</span>
+                            <span class="ticker-value" data-ticker="gold-per-point">{{ "%.2f" % gold_per_point }}</span>
                         </div>
                         <div class="ticker-item">
                             <span class="ticker-symbol">- DND.AUCTION -</span>
@@ -282,8 +282,8 @@
                             <span class="ticker-change ticker-change-neutral" data-ticker-change="interest-rate">20R: 0.0%</span>
                         </div>
                         <div class="ticker-item">
-                            <span class="ticker-symbol">POOL.GOLD</span>
-                            <span class="ticker-value" data-ticker="gold-in-pool">{{ "%06d" % gold_in_pool }}</span>
+                            <span class="ticker-symbol">GOLD / POINT</span>
+                            <span class="ticker-value" data-ticker="gold-per-point">{{ "%.2f" % gold_per_point }}</span>
                         </div>
                         <div class="ticker-item">
                             <span class="ticker-symbol">- DND.AUCTION -</span>
@@ -387,7 +387,7 @@
         const goldIncomeEls = document.querySelectorAll('[data-ticker="gold-income"]');
         const goldLimitEls = document.querySelectorAll('[data-ticker="gold-limit"]');
         const interestRateEls = document.querySelectorAll('[data-ticker="interest-rate"]');
-        const poolEls = document.querySelectorAll('[data-ticker="gold-in-pool"]');
+        const goldPerPointEls = document.querySelectorAll('[data-ticker="gold-per-point"]');
         const goldIncomeChangeEls = document.querySelectorAll('[data-ticker-change="gold-income"]');
         const goldLimitChangeEls = document.querySelectorAll('[data-ticker-change="gold-limit"]');
         const interestRateChangeEls = document.querySelectorAll('[data-ticker-change="interest-rate"]');
@@ -462,7 +462,7 @@
             const goldIncome = bank.gold_income_per_round;
             const interestRate = bank.bank_interest_per_round;
             const goldLimit = bank.bank_limit_per_round;
-            const goldInPool = data.gold_in_pool;
+            const goldPerPoint = data.gold_per_point;
 
             if (statusEl) {
                 statusEl.textContent = isDone ? 'Closed' : 'Live Trading';
@@ -495,9 +495,9 @@
                 const txt = formatRateWidth(interestRate, 5);
                 interestRateEls.forEach(el => { el.textContent = txt; });
             }
-            if (poolEls.length && goldInPool !== undefined) {
-                const txt = formatIntWidth(goldInPool, 6);
-                poolEls.forEach(el => { el.textContent = txt; });
+            if (goldPerPointEls.length && goldPerPoint !== undefined) {
+                const txt = (Number(goldPerPoint) || 0).toFixed(2);
+                goldPerPointEls.forEach(el => { el.textContent = txt; });
             }
 
             // Update 20-round change badges

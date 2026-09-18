@@ -1,7 +1,7 @@
 import sys
 import os
 import json
-from urllib.request import urlopen
+from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
 
 
@@ -22,10 +22,10 @@ def main():
             sys.exit(1)
 
     url = f"http://{host}:{port}/reset/{play_token}"
-    print(f"Connecting to: {url}")
+    print(f"Connecting to: http://{host}:{port}/reset/<play_token>")
 
     try:
-        with urlopen(url, timeout=10) as resp:
+        with urlopen(Request(url, method="POST"), timeout=10) as resp:
             data = resp.read().decode("utf-8")
             try:
                 payload = json.loads(data)

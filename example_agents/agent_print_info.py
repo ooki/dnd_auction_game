@@ -28,8 +28,7 @@ def print_info(agent_id: str,
              states: dict,
              auctions: dict,
              prev_auctions: dict,
-             pool: int,
-             prev_pool_buys: dict,
+             gold_per_point: float,
              bank_state: dict):
 
     agent_state = states[agent_id]
@@ -39,7 +38,7 @@ def print_info(agent_id: str,
     print("=============== NEW ROUND ===============")
     print("Current gold: {}".format(current_gold))
     print("Current points: {}".format(current_points))
-    print("Current amount gold in pool: {}".format(pool))
+    print("Current gold per point: {:.2f}".format(gold_per_point))
     print()
 
     print(" - remainder -")
@@ -59,12 +58,6 @@ def print_info(agent_id: str,
     print(bank_state["gold_income_per_round"])
     print(bank_state["bank_limit_per_round"])
     print(bank_state["bank_interest_per_round"])
-
-    # prev pool buys
-    if len(prev_pool_buys) > 0:
-        print(" - Previous Round Pool Buys -")
-        for a_id, points in prev_pool_buys.items():
-            print("Agent: {}  points: {}".format(a_id, points))
 
     # Calculate the mean gold/points for the other players.
     gold = []

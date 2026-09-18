@@ -6,7 +6,6 @@ from typing import List, Dict, Union
 from collections import defaultdict
 import json
 from contextlib import asynccontextmanager
-import threading
 
 
 from fastapi.responses import HTMLResponse
@@ -17,19 +16,23 @@ from fastapi import (
 )
 
 from dnd_auction_game.connection_manager import ConnectionManager
-from dnd_auction_game.auction_house import AuctionHouse
+from dnd_auction_game.auction_house import AuctionHouse, parse_int
 from dnd_auction_game.leadboard import generate_leadboard   
 
 
 game_token = os.environ.get("AH_GAME_TOKEN", "play123")
 play_token = os.environ.get("AH_PLAY_TOKEN", "play123")
+MAX_ROUNDS = int(os.environ.get("AH_MAX_ROUNDS", "10000"))
+MAX_AGENTS = int(os.environ.get("AH_MAX_AGENTS", "200"))
 auction_house = AuctionHouse(game_token=game_token, play_token=play_token, save_logs=True)
 connection_manager = ConnectionManager()
 
 _previous_ranks: Dict[str, int] = {}
 _rank_signals: Dict[str, Dict[str, int]] = {}
 _last_rank_round: int = -1
-_reset_lock = threading.Lock()
+# Serialises game-state transitions (tick, reset, start) so a reset can never
+# interleave with a round being processed.
+_state_lock = asyncio.Lock()
 
 
 def _reset_game_state():
@@ -39,6 +42,15 @@ def _reset_game_state():
     _previous_ranks = {}
     _rank_signals = {}
     _last_rank_round = -1
+
+
+async def _reset_if_done():
+    """Start a fresh game if the previous one has finished."""
+    if not auction_house.is_done:
+        return
+    async with _state_lock:
+        if auction_house.is_done:
+            _reset_game_state()
 
 
 def _compute_leadboard_state():
@@ -59,7 +71,7 @@ def _compute_leadboard_state():
     gold_income = 1000
     interest_rate = 1.0
     gold_limit = 2000
-    gold_in_pool = max(auction_house.gold_in_pool, 0)
+    gold_per_point = auction_house.gold_per_point
 
     # 20-round change calculations
     gold_income_change = 0.0
@@ -188,7 +200,7 @@ def _compute_leadboard_state():
         "gold_income": gold_income,
         "interest_rate": interest_rate,
         "gold_limit": gold_limit,
-        "gold_in_pool": gold_in_pool,
+        "gold_per_point": gold_per_point,
         "gold_income_change": round(gold_income_change, 1),
         "interest_rate_change": round(interest_rate_change, 1),
         "gold_limit_change": round(gold_limit_change, 1),
@@ -196,39 +208,44 @@ def _compute_leadboard_state():
         "min_gold": min_gold,
     }
 
+async def _process_round():
+    try:
+        auction_house.process_point_purchases()
+    except Exception as e:
+        print("error in process_point_purchases:", e)
+
+    try:
+        auction_house.process_all_bids()
+    except Exception as e:
+        print("error in process_all_bids:", e)
+
+    round_data = None
+    try:
+        round_data = auction_house.prepare_auctions()
+    except Exception as e:
+        print("error in prepare_auctions:", e)
+
+    if round_data is not None:
+        try:
+            await connection_manager.broadcast(round_data, timeout=0.5)
+        except Exception as e:
+            print("error in broadcast:", e)
+
+    if auction_house.round_counter >= auction_house.num_rounds_in_game:
+        auction_house.is_active = False
+        auction_house.is_done = True
+
+        try:
+            await connection_manager.disconnect_all()
+        except Exception as e:
+            print("error in disconnect_all:", e)
+
+
 async def server_tick():
     while True:
-        if auction_house.is_active:
-            try:
-                auction_house.process_pool_buys()
-            except Exception as e:
-                print("error in process_pool_buys:", e)
-
-            try:
-                auction_house.process_all_bids()
-            except Exception as e:
-                print("error in process_all_bids:", e)
-
-            round_data = None
-            try:
-                round_data = auction_house.prepare_auctions_and_pool()
-            except Exception as e:
-                print("error in prepare_auctions_and_pool:", e)
-
-            if round_data is not None:
-                try:
-                    await connection_manager.broadcast(round_data, timeout=0.5)
-                except Exception as e:
-                    print("error in broadcast:", e)
-
-            if auction_house.round_counter >= auction_house.num_rounds_in_game:
-                auction_house.is_active = False
-                auction_house.is_done = True
-
-                try:
-                    await connection_manager.disconnect_all()
-                except Exception as e:
-                    print("error in disconnect_all:", e)
+        async with _state_lock:
+            if auction_house.is_active:
+                await _process_round()
 
         await asyncio.sleep(1.0)
 
@@ -253,12 +270,10 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
     
 
     if token != auction_house.game_token:
+        await websocket.close(code=1008)  # policy violation -> HTTP 403 before accept
         return
 
-    if auction_house.is_done:
-        with _reset_lock:
-            if auction_house.is_done:
-                _reset_game_state()
+    await _reset_if_done()
 
     try:
         await websocket.accept()
@@ -267,18 +282,28 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
         a_id = agent_info.get("a_id", "")
         name = agent_info.get("name", "")
         player_id = agent_info.get("player_id", "")
+        secret = agent_info.get("secret", "")
         
+        if not all(isinstance(v, str) for v in (a_id, name, player_id, secret)):
+            await websocket.close()
+            return
+
         if len(a_id) < 5 or len(name) < 1 or len(name) > 64:
             await websocket.close()
             return
         
-        if len(player_id) < 1:
+        if len(player_id) < 1 or len(player_id) > 128:
+            await websocket.close()
+            return
+
+        if len(secret) < 8 or len(secret) > 256:
             await websocket.close()
             return
         
         agent_info["a_id"] = a_id
         agent_info["name"] = name
         agent_info["player_id"] = player_id
+        agent_info["secret"] = secret
         
     except WebSocketDisconnect:
         return
@@ -291,38 +316,50 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
     if auction_house.is_active and agent_info["a_id"] not in auction_house.agents:
         try:
             await websocket.close()
-        except:
+        except Exception:
             pass
         return
     
+    a_id = agent_info["a_id"]
+    if a_id not in auction_house.agents and len(auction_house.agents) >= MAX_AGENTS:
+        print("agent: {} rejected: server full ({} agents)".format(a_id, MAX_AGENTS))
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+        return
+
+    accepted = auction_house.add_agent(
+        agent_info["name"], a_id, agent_info["player_id"], agent_info["secret"]
+    )
+    if not accepted:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+        return
+
     try:        
-        await connection_manager.add_connection(websocket)
-        auction_house.add_agent(agent_info["name"], agent_info["a_id"], agent_info["player_id"])
-        a_id = agent_info["a_id"]
+        await connection_manager.add_connection(websocket, a_id=a_id)
         
         while auction_house.is_done is False:
-            binds = {}
-            pool = 0
-
-            bids_and_pool = await websocket.receive_json()
-            try:
-                if bids_and_pool is None or bids_and_pool == {}:
-                    continue
-                
-                bids = bids_and_pool.get("bids", {})
-                pool = bids_and_pool.get("pool", 0)
-
-            except Exception as e:
-                print("error in receive_json:", e)
+            bids_and_purchase = await websocket.receive_json()
+            if not isinstance(bids_and_purchase, dict) or not bids_and_purchase:
                 continue
-                        
+
+            bids = bids_and_purchase.get("bids", {})
+            points_to_spend = bids_and_purchase.get("points_to_spend", 0)
+
             try:
-                if pool > 0:
-                    auction_house.register_pool_buy(a_id, pool)
+                auction_house.register_point_purchase(a_id, points_to_spend)
 
                 if isinstance(bids, dict):
-                    for auction_id, gold in bids.items():
-                        auction_house.register_bid(a_id, str(auction_id), gold)
+                    # An agent can hold at most one bid per open auction; anything
+                    # beyond that is noise and is not worth iterating.
+                    max_bids = len(auction_house.current_auctions)
+                    for auction_id, gold in list(bids.items())[:max_bids]:
+                        if isinstance(auction_id, str):
+                            auction_house.register_bid(a_id, auction_id, gold)
 
             except Exception as e:
                 print("error processing bids:", e)
@@ -335,8 +372,8 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
         connection_manager.disconnect(websocket)
         return
     
-    except:
-        print("agent: {} was disconnected due to error.".format(agent_info["a_id"]))
+    except Exception as e:
+        print("agent: {} was disconnected due to error: {!r}".format(agent_info["a_id"], e))
         connection_manager.disconnect(websocket)
         return
     
@@ -348,59 +385,64 @@ async def websocket_endpoint_runner(websocket: WebSocket, play_token: str):
 
     if play_token != auction_house.play_token:
         print("wrong play token")
+        await websocket.close(code=1008)
         return
     
-    if auction_house.is_done:
-        print("starting new game")
-        with _reset_lock:
-            if auction_house.is_done:
-                _reset_game_state()
+    await _reset_if_done()
 
     try:
         await websocket.accept()
 
         game_info = await websocket.receive_json()
-        num_rounds = max(1, int(game_info.get("num_rounds", 10)))
-        auction_house.num_rounds_in_game = num_rounds
-        auction_house.set_num_rounds(auction_house.num_rounds_in_game)
+        requested = game_info.get("num_rounds", 10) if isinstance(game_info, dict) else None
+        num_rounds = parse_int(requested, 1, MAX_ROUNDS)
+        if num_rounds is None:
+            print("invalid num_rounds: {!r} (must be 1..{})".format(requested, MAX_ROUNDS))
+            await websocket.send_json({"error": "num_rounds must be an int in 1..{}".format(MAX_ROUNDS)})
+            await websocket.close()
+            return
 
-        print("starting game with {} rounds".format(auction_house.num_rounds_in_game))
+        async with _state_lock:
+            if auction_house.is_active:
+                print("game already running; ignoring start request")
+                await websocket.send_json({"error": "a game is already running; reset the server first"})
+                await websocket.close()
+                return
 
-        game_info = {
+            auction_house.num_rounds_in_game = num_rounds
+            auction_house.set_num_rounds(auction_house.num_rounds_in_game)
+            auction_house.assign_priorities()
+            auction_house.is_active = True
+
+        print("<started game with {} rounds>".format(num_rounds))
+
+        await websocket.send_json({
             "game_token": auction_house.game_token,
             "num_players": len(auction_house.agents),
-        }
-
-        await websocket.send_json(game_info)        
-        
-    except WebSocketDisconnect:
-        print("game not started due to disconnect.")
-        return
-
-    
-    auction_house.assign_priorities()
-    auction_house.is_active = True
-    print("<started game>")
-
-    try:
+        })
         await websocket.close()
-    except:
-        print("game not started due to error.")
-        
 
-@app.get("/reset/{play_token}")
+    except WebSocketDisconnect:
+        print("runner disconnected.")
+    except Exception as e:
+        print("error in runner endpoint:", repr(e))
+
+
+@app.post("/reset/{play_token}")
 async def reset_server(play_token: str):
     print("reset_server - PLAY TOKEN:", play_token)
     if play_token != auction_house.play_token:
         return {"ok": False, "error": "wrong play token"}
 
-    # Disconnect any existing clients and reset state
-    try:
-        await connection_manager.disconnect_all()
-    except Exception as e:
-        print("error in disconnect_all during reset:", e)
+    async with _state_lock:
+        # Disconnect any existing clients and reset state
+        try:
+            await connection_manager.disconnect_all()
+        except Exception as e:
+            print("error in disconnect_all during reset:", e)
 
-    _reset_game_state()
+        _reset_game_state()
+
     print("<server reset>")
     return {"ok": True}
 
@@ -418,7 +460,7 @@ async def get():
                 "bank_interest_per_round": state["interest_rate"],
                 "bank_limit_per_round": state["gold_limit"],
             },
-            gold_in_pool=state["gold_in_pool"],
+            gold_per_point=state["gold_per_point"],
         )
     )
 
@@ -435,8 +477,9 @@ async def get_leadboard_data():
             "bank_interest_per_round": state["interest_rate"],
             "bank_limit_per_round": state["gold_limit"],
         },
-        "gold_in_pool": state["gold_in_pool"],
-        "players": state["players"],
+        "gold_per_point": state["gold_per_point"],
+        # a_id is the reconnect identity; never expose it on the public API.
+        "players": [{k: v for k, v in p.items() if k != "id"} for p in state["players"]],
         "max_gold": state["max_gold"],
         "min_gold": state["min_gold"],
         "gold_income_change": state["gold_income_change"],

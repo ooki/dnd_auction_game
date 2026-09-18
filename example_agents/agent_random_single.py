@@ -19,8 +19,7 @@ def random_single_bid(agent_id: str,
                         states: dict,
                         auctions: dict,
                         prev_auctions: dict,
-                        pool: int,
-                        prev_pool_buys: dict,
+                        gold_per_point: float,
                         bank_state: dict):
 
     agent_state = states[agent_id]
@@ -44,8 +43,7 @@ def random_single_bid(agent_id: str,
         
         bids[target_auction_id] = bid_amount
 
-    points_for_pool = 0
-    return {"bids": bids, "pool": points_for_pool}
+    return {"bids": bids, "points_to_spend": 0}
 
 
 

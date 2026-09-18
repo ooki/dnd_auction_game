@@ -6,7 +6,7 @@ Every round, each player receives gold income (starts at ~1000, varies each roun
 
 The server awards each auction to the highest bidder. In case of a tie, priority determines the winner (priority swaps after ties to keep things fair). The winning player earns points based on a random dice roll.
 
-If you don't win an auction, you get back 50% of the gold you bid. The remaining 50% goes into a shared gold pool that players can claim by spending points.
+If you don't win an auction, you get back 50% of the gold you bid; the other 50% is removed from the game. Players may also spend points to buy gold at the current gold-per-point rate. This rate is calculated from the previous round as total winning-bid gold divided by `max(1, total actual points awarded to winners)`. The first round's rate is 0 gold per point. A player may spend points down to, but never below, -100 points.
 
 In addition, the Iron Bank of Braavos pays interest on your gold holdings (up to a limit). The interest rate, bank limit, and gold income all vary each round via random walks—use `bank_state` to see future values and plan ahead.
 
@@ -88,8 +88,7 @@ def make_bid(agent_id: str,
              states: dict,
              auctions: dict,
              prev_auctions: dict,
-             pool: int,
-             prev_pool_buys: dict,
+             gold_per_point: float,
              bank_state: dict) -> dict:
 ```
 
@@ -102,6 +101,7 @@ def make_bid(agent_id: str,
 - **`states`** (`dict`): All agents' current state. Key: `agent_id`, Value: `{"gold": int, "points": int}`.
   - Access your own state: `states[agent_id]`
   - Iterate over opponents by skipping your own `agent_id`.
+  - The raw round payload also includes `team_names`, a mapping from `agent_id` to the public team name shown on the leaderboard. Player IDs are never sent to clients.
 
 - **`auctions`** (`dict`): Auctions available this round. Key: `auction_id`, Value: `{"die": int, "num": int, "bonus": int}`.
   - `die`: Size of the die (2, 3, 4, 6, 8, 10, 12, or 20).
@@ -116,9 +116,7 @@ def make_bid(agent_id: str,
   - `bids`: List of bids sorted by amount (highest first). Each bid: `{"a_id": str, "gold": int}`.
   - The first entry in `bids` is always the winning bid.
 
-- **`pool`** (`int`): Current gold in the pool. Players can spend points to claim a share of this gold.
-
-- **`prev_pool_buys`** (`dict`): Pool purchases from the previous round. Key: `agent_id`, Value: points spent.
+- **`gold_per_point`** (`float`): Gold received for each point spent this round. It is based on the completed previous round's winning bids and rewards; it is `0` in the first round and after a round with no winning bids.
 
 - **`bank_state`** (`dict`): Bank parameters from current round to end of game:
   - `gold_income_per_round`: List of gold income values. Index 0 is the current round.
@@ -128,7 +126,7 @@ def make_bid(agent_id: str,
 
 ### Return Value
 
-Return a dictionary with your bids and optional pool purchase:
+Return a dictionary with your bids and optional point-to-gold purchase:
 
 ```python
 {
@@ -137,7 +135,7 @@ Return a dictionary with your bids and optional pool purchase:
         "auction_id_2": gold_amount,
         # ... bid on as many auctions as you want
     },
-    "pool": points_to_spend  # optional, spend points to claim pool gold
+    "points_to_spend": points_to_spend  # optional; total points cannot fall below -100
 }
 ```
 
@@ -161,7 +159,7 @@ The logs (complete history) will be stored in ./logs use it to  create clever ag
 
 If you want to start a fresh game without restarting uvicorn, you can reset the server:
 
-- Run: `python -m dnd_auction_game.reset [PLAY_TOKEN] [HOST] [PORT]`
+- Run: `python -m dnd_auction_game.reset [PLAY_TOKEN] [HOST] [PORT]` (sends `POST /reset/{PLAY_TOKEN}`)
 - Examples:
   - `python -m dnd_auction_game.reset`  (uses `AH_PLAY_TOKEN` env var or 'play123', host=localhost, port=8000)
   - `python -m dnd_auction_game.reset mytoken`  (host=localhost, port=8000)
@@ -174,5 +172,5 @@ Environment variable:
 What reset does:
 
 - Disconnects all connected clients.
-- Clears all game state (players, rounds, auctions, pool).
+- Clears all game state (players, rounds, auctions, and exchange rate).
 - Makes the server ready to accept new players and start a new game.

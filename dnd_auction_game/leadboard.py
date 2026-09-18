@@ -9,7 +9,7 @@ env = Environment(
     autoescape=select_autoescape(["html", "xml"]),
 )
 
-def generate_leadboard(players, round, is_done, bank_state, gold_in_pool):
+def generate_leadboard(players, round, is_done, bank_state, gold_per_point):
 
     template = env.get_template("leadboard.html")
     return template.render(
@@ -19,7 +19,7 @@ def generate_leadboard(players, round, is_done, bank_state, gold_in_pool):
         gold_income=bank_state["gold_income_per_round"],
         interest_rate=bank_state["bank_interest_per_round"],
         gold_limit=bank_state["bank_limit_per_round"],
-        gold_in_pool=gold_in_pool,
+        gold_per_point=gold_per_point,
     )
 
 

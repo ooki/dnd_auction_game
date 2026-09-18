@@ -5,6 +5,40 @@ from collections import defaultdict
 import json
 import math
 import os
+import hmac
+import hashlib
+
+
+MAX_INT_STR_LEN = 12
+MAX_POINTS_REQUEST = 10**9
+
+
+def parse_int(value, lo:int, hi:int):
+    """Strictly parse an untrusted value into an int within [lo, hi].
+
+    Accepts int (not bool), integral float, or a short numeric string.
+    Returns None if the value is malformed or out of range.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, float):
+        if not math.isfinite(value) or not value.is_integer():
+            return None
+        value = int(value)
+    elif isinstance(value, str):
+        value = value.strip()
+        if len(value) > MAX_INT_STR_LEN:
+            return None
+        try:
+            value = int(value)
+        except ValueError:
+            return None
+    elif not isinstance(value, int):
+        return None
+
+    if value < lo or value > hi:
+        return None
+    return value
 
 
 def generate_gold_random_walk(n_steps:int) -> List[float]:
@@ -93,11 +127,13 @@ class AuctionHouse:
         self.save_logs = save_logs
         self.gold_income = 1000
 
-        self.gold_in_pool = 0 # the gold that was removed during the cashback
-        self.convert_to_pool_fraction = 0.9 # the fraction of gold that is returned to the hoard
-        
+        # Gold received for one point spent. The initial round has no prior auctions.
+        self.gold_per_point = 0.0
+        self.current_point_purchases = {}
+
         self.agents = {}
         self.names = {}
+        self.secrets = {}
         self.points_gain_history = {}
         self._prev_points = {}
         
@@ -118,7 +154,6 @@ class AuctionHouse:
         self.current_bids = defaultdict(list)
         self.num_rounds_in_game = 10
         self.priority = {}
-        self.current_pool_buys = {}
 
         self.num_rounds_in_game : int = None
         self.gold_income_per_round : List[int] = None
@@ -161,6 +196,7 @@ class AuctionHouse:
         self.is_active = False
         self.agents = {}
         self.names = {}
+        self.secrets = {}
         self.points_gain_history = {}
         self._prev_points = {}
         self.current_auctions = {}
@@ -170,7 +206,8 @@ class AuctionHouse:
         self.auction_counter = 1
         self.num_rounds_in_game = 10
         self.priority = {}
-        self.gold_in_pool = 0
+        self.gold_per_point = 0.0
+        self.current_point_purchases = {}
         self.set_num_rounds(10)
         self._find_log_file()
         
@@ -186,10 +223,28 @@ class AuctionHouse:
                     self.priority[a_id] = p
                     break
         
-    def add_agent(self, name:str, a_id:str, player_id:str):
+    @staticmethod
+    def _hash_secret(secret:str) -> str:
+        return hashlib.sha256(secret.encode("utf-8")).hexdigest()
+
+    def verify_secret(self, a_id:str, secret:str) -> bool:
+        """True if a_id is known and secret matches the one given at first connect."""
+        stored = self.secrets.get(a_id)
+        if stored is None:
+            return False
+        return hmac.compare_digest(stored, self._hash_secret(secret))
+
+    def add_agent(self, name:str, a_id:str, player_id:str, secret:str) -> bool:
+        """Register a new agent, or accept a reconnect if the secret matches.
+
+        Returns False if a_id is already taken and the secret does not match.
+        """
         if a_id in self.agents:
+            if not self.verify_secret(a_id, secret):
+                print("Agent id:{} rejected: wrong secret".format(a_id))
+                return False
             print("Agent {}  id:{} reconnected".format(name, a_id))
-            return
+            return True
 
         try:
             with open(self.log_player_id_file, 'a') as fp:
@@ -201,21 +256,19 @@ class AuctionHouse:
                     
         self.agents[a_id] = {"gold": 0, "points": 0}
         self.names[a_id] = name
+        self.secrets[a_id] = self._hash_secret(secret)
         self.points_gain_history.setdefault(a_id, [])
         self._prev_points.setdefault(a_id, 0)
+        return True
     
     
-    def prepare_auctions_and_pool(self):        
+    def prepare_auctions(self):
         prev_auctions = self.current_auctions
         prev_bids = self.current_bids
         prev_rolls = self.current_rolls
         
         self.current_bids = defaultdict(list)
         self.current_auctions, self.current_rolls = self._generate_auctions()
-
-        # copy the pool buys to broodcast, reset the pool buys
-        buy_pool_copy = self.current_pool_buys.copy()
-        self.current_pool_buys = {} 
 
 
         # update gold for agents - clamp round_counter to valid index
@@ -249,11 +302,12 @@ class AuctionHouse:
 
         state = {
             "round": self.round_counter,
+            # Public team labels shown on the leaderboard. Player IDs are never broadcast.
+            "team_names": self.names.copy(),
             "states": self.agents,
             "auctions": self.current_auctions,
             "prev_auctions": out_prev_state,
-            "prev_pool_buys": buy_pool_copy,
-            "pool": self.gold_in_pool,
+            "gold_per_point": self.gold_per_point,
             "remainder_gold_income": self.gold_income_per_round[self.round_counter:],
             "remainder_bank_limit": self.bank_limit_per_round[self.round_counter:],
             "remainder_bank_interest": self.bank_interest_per_round[self.round_counter:],
@@ -309,36 +363,35 @@ class AuctionHouse:
                     
         return auctions, rolls
 
-    def register_pool_buy(self, a_id:str, points:int):
+    def register_point_purchase(self, a_id: str, points: int):
+        """Register this round's point-to-gold purchase request.
+
+        A request replaces any earlier request from the same agent in this round.
+        Settlement occurs at the next tick using the rate visible to the agent.
+        """
         if a_id not in self.agents:
             return
-        
-        try:
-            points = int(points)
-        except (TypeError, ValueError):
+
+        points = parse_int(points, 0, MAX_POINTS_REQUEST)
+        if points is None:
             return
-        
-        points = max(points, 0)
 
-        self.current_pool_buys[a_id] = points
-            
-        # register the negative amount of points (if any)
-        self.agents[a_id]["points"] -= points
+        max_spend = max(0, self.agents[a_id]["points"] + 100)
+        self.current_point_purchases[a_id] = min(points, max_spend)
 
-    
-    def process_pool_buys(self):
+    def process_point_purchases(self):
+        """Settle requested purchases while enforcing the -100 point floor."""
+        for a_id, requested_points in self.current_point_purchases.items():
+            agent = self.agents.get(a_id)
+            if agent is None:
+                continue
 
-        total_amount = max(1, sum(self.current_pool_buys.values()))
+            points = min(requested_points, max(0, agent["points"] + 100))
+            agent["points"] -= points
+            # Gold balances and bids are integers, so fractional gold is rounded down.
+            agent["gold"] += int(points * self.gold_per_point)
 
-        # now divide the pool by the fraction each player has bought
-        for a_id, points in self.current_pool_buys.items():
-
-            fraction = points / total_amount
-            gold_return = int(self.gold_in_pool * fraction)
-            if points > 0:
-                gold_return = max(1, gold_return)
-
-            self.agents[a_id]["gold"] += gold_return
+        self.current_point_purchases = {}
 
 
 
@@ -349,25 +402,17 @@ class AuctionHouse:
         if a_id not in self.agents:
             return
 
-        try:
-            gold = int(gold)
-        except (TypeError, ValueError):
-            return
-        
-        if gold < 1:
-            return
-
-                
-        if self.agents[a_id]["gold"] < gold:
+        gold = parse_int(gold, 1, self.agents[a_id]["gold"])
+        if gold is None:
             return
 
         self.current_bids[auction_id].append( (a_id, gold) )
         self.agents[a_id]["gold"] -= gold
 
     
-    def process_all_bids(self):        
-
-        gold_from_non_winning_bids = 0
+    def process_all_bids(self):
+        winning_gold_total = 0
+        winning_points_total = 0
         for auction_id, bids in self.current_bids.items():
             if not bids:
                 continue
@@ -389,15 +434,16 @@ class AuctionHouse:
                     self.priority[winner] = pl
                     self.priority[swap_with] = pw
 
+            # The next round's exchange rate uses one selected winning bid per auction.
+            winning_gold_total += win_amount
+            winning_points_total += points
+
             # update now that we know the winners
             for a_id, bid in bids:
                 if a_id == winner and bid == win_amount:
                     self.agents[a_id]["points"] += points
                 else:
                     back_value = int(bid * self.gold_back_fraction)
-                    removed_value = max(0, bid - back_value)
-                    gold_from_non_winning_bids += removed_value
                     self.agents[a_id]["gold"] += back_value
 
-        self.gold_in_pool = max(len(self.agents), int(gold_from_non_winning_bids * self.convert_to_pool_fraction))
-        
+        self.gold_per_point = winning_gold_total / max(1, winning_points_total)

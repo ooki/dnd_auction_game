@@ -20,7 +20,7 @@ class AuctionGameRunner:
         
     async def _internal_run(self):
         connection_str = "ws://{}:{}/ws_run/{}".format(self.host, self.port, self.play_token)
-        print("connecting to: {}".format(connection_str))
+        print("connecting to: ws://{}:{}/ws_run/<play_token>".format(self.host, self.port))
         
 
         async with websockets.connect(connection_str) as sock:
@@ -31,6 +31,9 @@ class AuctionGameRunner:
 
             server_info_raw = await sock.recv()
             server_info = json.loads(server_info_raw)
+            if "error" in server_info:
+                print("<ERROR: server refused to start game: {}>".format(server_info["error"]))
+                return
             print("<server info: {}>".format(server_info))
             print("<game started>")
 
