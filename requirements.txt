@@ -1,6 +1,6 @@
 py-machineid
 fastapi
-uvicorn 
-websockets
+uvicorn>=0.35.0
+websockets>=14
 Jinja2
 numpy

@@ -137,6 +137,9 @@ class AuctionHouse:
         self.secrets = {}
         self.points_gain_history = {}
         self._prev_points = {}
+        # Kept outside the public agent state: it is for leaderboard reporting
+        # only and must never be included in websocket round payloads.
+        self.points_sold_total = {}
         
         self.bank_interest_rate = 1.1
         self.auctions_per_agent = 1.5
@@ -214,6 +217,7 @@ class AuctionHouse:
         self.secrets = {}
         self.points_gain_history = {}
         self._prev_points = {}
+        self.points_sold_total = {}
         self.current_auctions = {}
         self.current_rolls = {} 
         self.current_bids = defaultdict(list)
@@ -275,6 +279,7 @@ class AuctionHouse:
         self.secrets[a_id] = self._hash_secret(secret)
         self.points_gain_history.setdefault(a_id, [])
         self._prev_points.setdefault(a_id, 0)
+        self.points_sold_total.setdefault(a_id, 0)
         return True
     
     
@@ -410,6 +415,7 @@ class AuctionHouse:
 
             points = min(requested_points, max(0, agent["points"] + 100))
             agent["points"] -= points
+            self.points_sold_total[a_id] = self.points_sold_total.get(a_id, 0) + points
             # Gold balances and bids are integers, so fractional gold is rounded down.
             agent["gold"] += int(points * gold_per_point)
 

@@ -3,16 +3,27 @@ import random
 import asyncio
 import json
 import os
+import ssl
+
+from typing import Optional
 
 import machineid
-import websockets
+from websockets.asyncio.client import connect
 from websockets.exceptions import ConnectionClosedError, ConnectionClosedOK, InvalidHandshake
+
+from dnd_auction_game.net import resolve_ssl, ws_scheme, is_local_host
 
 
 class AuctionGameClient:
-    def __init__(self, host:str, agent_name:str, token:str="play123", player_id:str="<identifier>", port:int=8000):
+    def __init__(self, host:str, agent_name:str, token:str="play123", player_id:str="<identifier>",
+                 port:int=8000, use_ssl:Optional[bool]=None):
+        """
+        use_ssl: None (default) picks automatically - plain ws:// for localhost/127.0.0.1,
+                 encrypted wss:// for any other host. Pass True/False to force it.
+        """
         self.host = host
         self.port = port
+        self.use_ssl = resolve_ssl(host, use_ssl)
         self.player_id = player_id
 
         self.token = token
@@ -25,7 +36,7 @@ class AuctionGameClient:
         if len(self.agent_name) > 64:
             raise ValueError("Agent name is too long: '{}'".format(self.agent_name))
         
-        if self.host.lower() == "localhost" or self.host == "127.0.0.1":
+        if is_local_host(self.host):
             self.agent_id = "local_rand_id_{}".format(random.randint(100, 1000000))
             self.agent_secret = machineid.hashed_id('auction-game-secret-{}'.format(self.agent_id))
         else:
@@ -53,12 +64,13 @@ class AuctionGameClient:
         agent_info["player_id"] = self.player_id[0:128]
         agent_info["secret"] = self.agent_secret
 
-        connection_str = "ws://{}:{}/ws/{}".format(self.host, self.port, self.token)
-        print("connecting to: ws://{}:{}/ws/<token>".format(self.host, self.port))
+        scheme = ws_scheme(self.use_ssl)
+        connection_str = "{}://{}:{}/ws/{}".format(scheme, self.host, self.port, self.token)
+        print("connecting to: {}://{}:{}/ws/<token>".format(scheme, self.host, self.port))
 
         rounds_received = 0
         try:
-            async with websockets.connect(connection_str) as sock:
+            async with connect(connection_str) as sock:
                 print("<connected to game server>")
                 print(json.dumps({k: v for k, v in agent_info.items() if k != "secret"}))
                 await sock.send(json.dumps(agent_info))
@@ -89,10 +101,23 @@ class AuctionGameClient:
                     await sock.send(json.dumps(new_bids))
         
         except InvalidHandshake as e:
-            print("<ERROR: server refused the connection ({}). Wrong game token?>".format(e))
+            if "403" in str(e):
+                print("<ERROR: server refused the connection ({}). Wrong game token?>".format(e))
+            elif not self.use_ssl:
+                print("<ERROR: no valid response from server ({}). If this is the real game server it "
+                      "requires TLS: use its DNS name as host, or pass use_ssl=True.>".format(e))
+            else:
+                print("<ERROR: websocket handshake failed ({})>".format(e))
+
+        except ssl.SSLError as e:
+            print("<ERROR: TLS handshake failed ({}). Is the server running with SSL? "
+                  "For a plain local server pass use_ssl=False.>".format(e))
 
         except OSError as e:
-            print("<ERROR: could not reach server at {}:{} ({})>".format(self.host, self.port, e))
+            hint = ""
+            if self.use_ssl:
+                hint = " (connecting with wss://; if the server has no certificate, pass use_ssl=False)"
+            print("<ERROR: could not reach server at {}:{} ({}){}>".format(self.host, self.port, e, hint))
 
         except ConnectionClosedError:
             print("<ERROR: Connection to server closed unexpectedly>")

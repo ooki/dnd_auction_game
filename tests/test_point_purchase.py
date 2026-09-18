@@ -42,6 +42,7 @@ class PointPurchaseTests(unittest.TestCase):
 
         self.assertEqual(house.agents["agent"]["points"], -100)
         self.assertEqual(house.agents["agent"]["gold"], 0)
+        self.assertEqual(house.points_sold_total["agent"], 300)
 
     def test_purchase_uses_published_rate_and_rounds_gold_down(self):
         house = self.make_house()
@@ -52,6 +53,7 @@ class PointPurchaseTests(unittest.TestCase):
 
         self.assertEqual(house.agents["agent"]["points"], 7)
         self.assertEqual(house.agents["agent"]["gold"], 8)
+        self.assertEqual(house.points_sold_total["agent"], 3)
 
     def test_points_won_this_round_can_be_sold_but_gold_cannot_fund_same_round_bids(self):
         house = self.make_house()
@@ -121,6 +123,7 @@ class PointPurchaseTests(unittest.TestCase):
         self.assertNotIn("player_id", state)
         self.assertNotIn("private-player-id", str(state))
         self.assertNotIn("s3cret-value", str(state))
+        self.assertNotIn("points_sold_total", state["states"]["agent1"])
 
     def test_reconnect_requires_matching_secret(self):
         house = self.make_house()

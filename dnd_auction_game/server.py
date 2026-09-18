@@ -5,6 +5,7 @@ import asyncio
 from typing import List, Dict, Union
 from collections import defaultdict
 import json
+import logging
 from contextlib import asynccontextmanager
 
 
@@ -65,6 +66,7 @@ def _compute_leadboard_state():
                 "name": name,
                 "points": info["points"],
                 "gold": info["gold"],
+                "points_sold_total": auction_house.points_sold_total.get(a_id, 0),
             }
         )
 
@@ -79,18 +81,24 @@ def _compute_leadboard_state():
     gold_limit_change = 0.0
 
     try:
-        rc = auction_house.round_counter
+        # prepare_auctions() publishes the values at round_counter and then
+        # increments round_counter.  The board is rendered after that method
+        # returns, so use the most recently published index rather than the
+        # next round's bank values.  Before the first tick, index 0 is the
+        # pending first-round market.
+        completed_rounds = auction_house.round_counter
         max_idx = len(auction_house.gold_income_per_round) - 1
-        rc_clamped = min(rc, max_idx) if max_idx >= 0 else 0
-        gold_income = auction_house.gold_income_per_round[rc_clamped]
-        interest_rate = auction_house.bank_interest_per_round[rc_clamped]
-        gold_limit = auction_house.bank_limit_per_round[rc_clamped]
+        market_idx = max(completed_rounds - 1, 0)
+        market_idx = min(market_idx, max_idx) if max_idx >= 0 else 0
+        gold_income = auction_house.gold_income_per_round[market_idx]
+        interest_rate = auction_house.bank_interest_per_round[market_idx]
+        gold_limit = auction_house.bank_limit_per_round[market_idx]
         
-        # Calculate 20-round change (compare current to 20 rounds ago)
-        if rc >= 20:
-            old_income = auction_house.gold_income_per_round[rc - 20]
-            old_interest = auction_house.bank_interest_per_round[rc - 20]
-            old_limit = auction_house.bank_limit_per_round[rc - 20]
+        # Calculate 20-round change against the same displayed market round.
+        if market_idx >= 20:
+            old_income = auction_house.gold_income_per_round[market_idx - 20]
+            old_interest = auction_house.bank_interest_per_round[market_idx - 20]
+            old_limit = auction_house.bank_limit_per_round[market_idx - 20]
             if old_income > 0:
                 gold_income_change = ((gold_income - old_income) / old_income) * 100
             if old_interest > 0:
@@ -136,6 +144,7 @@ def _compute_leadboard_state():
         name = entry["name"]
         points = entry["points"]
         gold = entry["gold"]
+        points_sold_total = entry["points_sold_total"]
 
         rank_fraction = (n_players - idx) / n_players
 
@@ -184,6 +193,7 @@ def _compute_leadboard_state():
                 "name": name,
                 "gold": gold,
                 "points": points,
+                "points_sold_total": points_sold_total,
                 "avg_gain_10": avg_gain_10,
                 "rank_move": rank_move,
                 "sparkline": sparkline,
@@ -489,5 +499,75 @@ async def get_leadboard_data():
         "gold_limit_change": state["gold_limit_change"],
         "interest_rate_change": state["interest_rate_change"],
     }
+
+
+DEFAULT_PORT = 8000
+
+
+class _RedactTokens(logging.Filter):
+    """Replace the game/play tokens in uvicorn log lines (request paths contain them)."""
+
+    @staticmethod
+    def _redact(value):
+        if not isinstance(value, str):
+            return value
+        for tok in {auction_house.game_token, auction_house.play_token}:
+            if tok:
+                value = value.replace(tok, "<token>")
+        return value
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        record.msg = self._redact(record.msg)
+        if isinstance(record.args, tuple):
+            record.args = tuple(self._redact(a) for a in record.args)
+        elif isinstance(record.args, dict):
+            record.args = {k: self._redact(v) for k, v in record.args.items()}
+        return True
+
+
+def _install_log_redaction():
+    for name in ("uvicorn.access", "uvicorn.error"):
+        logging.getLogger(name).addFilter(_RedactTokens())
+
+
+def main(argv=None):
+    """Start the game server: python -m dnd_auction_game.server [--port 8000] [...]"""
+    import argparse
+    import uvicorn
+
+    parser = argparse.ArgumentParser(
+        prog="python -m dnd_auction_game.server",
+        description="Run the DnD auction game server. Defaults match the example agents (localhost:8000).",
+    )
+    parser.add_argument("--host", default="127.0.0.1",
+                        help="interface to listen on (default: 127.0.0.1; use 0.0.0.0 to accept remote agents)")
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT, help="port (default: %(default)s)")
+    parser.add_argument("--ssl-keyfile", default=None, help="TLS private key (enables wss:// / https://)")
+    parser.add_argument("--ssl-certfile", default=None, help="TLS certificate chain")
+    parser.add_argument("--ws-max-size", type=int, default=65536,
+                        help="max incoming websocket message size in bytes (default: %(default)s)")
+    parser.add_argument("--no-access-log", action="store_true",
+                        help="disable uvicorn's per-request log lines")
+    args = parser.parse_args(argv)
+
+    if bool(args.ssl_keyfile) != bool(args.ssl_certfile):
+        parser.error("--ssl-keyfile and --ssl-certfile must be given together")
+
+    _install_log_redaction()
+    uvicorn.run(
+        app,
+        host=args.host,
+        port=args.port,
+        ssl_keyfile=args.ssl_keyfile,
+        ssl_certfile=args.ssl_certfile,
+        ws_max_size=args.ws_max_size,
+        # Avoid websockets' deprecated legacy protocol implementation.
+        ws="websockets-sansio",
+        access_log=not args.no_access_log,
+    )
+
+
+if __name__ == "__main__":
+    main()
 
 

@@ -8,7 +8,8 @@ import unittest
 from unittest.mock import patch
 
 import uvicorn
-import websockets
+from websockets.asyncio.client import connect
+from websockets.exceptions import ConnectionClosed
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
@@ -185,6 +186,7 @@ class ServerAuthTests(unittest.TestCase):
         self.assertNotIn("id", data["players"][0])
         self.assertNotIn("agent_one", str(data))
         self.assertEqual(data["players"][0]["name"], "Agent One")
+        self.assertEqual(data["players"][0]["points_sold_total"], 0)
 
 
 class LiveServerReconnectTests(unittest.TestCase):
@@ -197,7 +199,10 @@ class LiveServerReconnectTests(unittest.TestCase):
         with socket.socket() as s:
             s.bind(("127.0.0.1", 0))
             cls.port = s.getsockname()[1]
-        config = uvicorn.Config(server.app, host="127.0.0.1", port=cls.port, log_level="warning")
+        config = uvicorn.Config(
+            server.app, host="127.0.0.1", port=cls.port, log_level="warning",
+            ws="websockets-sansio",
+        )
         cls.uvicorn = uvicorn.Server(config)
         cls.thread = threading.Thread(target=cls.uvicorn.run, daemon=True)
         cls.thread.start()
@@ -217,19 +222,19 @@ class LiveServerReconnectTests(unittest.TestCase):
         try:
             await asyncio.wait_for(ws.recv(), timeout)
             return False
-        except websockets.ConnectionClosed:
+        except ConnectionClosed:
             return True
         except asyncio.TimeoutError:
             return False
 
     def test_reconnect_with_correct_secret_replaces_old_socket(self):
         async def scenario():
-            old = await websockets.connect(self.url)
+            old = await connect(self.url)
             await old.send(json.dumps(hello()))
             self.assertTrue(await async_wait_for(lambda: n_active() == 1))
             first = server.connection_manager.agent_connections["agent_one"]
 
-            new = await websockets.connect(self.url)
+            new = await connect(self.url)
             await new.send(json.dumps(hello()))
             self.assertTrue(await self.closed(old))
             self.assertTrue(await async_wait_for(lambda: n_active() == 1))
@@ -243,11 +248,11 @@ class LiveServerReconnectTests(unittest.TestCase):
     def test_reconnect_allowed_when_server_full(self):
         async def scenario():
             with patch.object(server, "MAX_AGENTS", 1):
-                first = await websockets.connect(self.url)
+                first = await connect(self.url)
                 await first.send(json.dumps(hello()))
                 self.assertTrue(await async_wait_for(lambda: n_active() == 1))
 
-                again = await websockets.connect(self.url)
+                again = await connect(self.url)
                 await again.send(json.dumps(hello()))
                 self.assertTrue(await self.closed(first))
                 self.assertFalse(await self.closed(again, timeout=0.3))

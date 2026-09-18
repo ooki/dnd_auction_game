@@ -128,7 +128,7 @@
         .col-rank { width: 72px; font-variant-numeric: tabular-nums; color: var(--text-muted); }
         .col-name { min-width: 180px; }
         .col-grade { width: 110px; }
-        .col-gold, .col-points { width: 120px; text-align: right; font-variant-numeric: tabular-nums; }
+        .col-gold, .col-points, .col-points-sold { width: 120px; text-align: right; font-variant-numeric: tabular-nums; }
         .pill-grade {
             display: inline-flex; align-items: center; justify-content: center;
             min-width: 38px; padding: 3px 10px; border-radius: 999px;
@@ -320,6 +320,7 @@
                                 <th class="col-gold">Gold</th>
                                 <th class="volume-cell">Gold Depth</th>
                                 <th class="col-points">Points Index</th>
+                                <th class="col-points-sold">Points Sold</th>
                                 <th class="sparkline-cell">20R Trend</th>
                             </tr>
                         </thead>
@@ -352,6 +353,7 @@
                                         </div>
                                     {% endif %}
                                 </td>
+                                <td class="col-points-sold">{{ player.points_sold_total|e }}</td>
                                 <td class="sparkline-cell">
                                     <svg class="sparkline-svg" viewBox="0 0 80 24" preserveAspectRatio="none">
                                         <path class="sparkline-area sparkline-area-neutral" d=""></path>
@@ -616,6 +618,10 @@
                         pointsTd.appendChild(avgDiv);
                     }
 
+                    const pointsSoldTd = document.createElement('td');
+                    pointsSoldTd.className = 'col-points-sold';
+                    pointsSoldTd.textContent = (Number(p.points_sold_total) || 0).toLocaleString();
+
                     // Sparkline cell
                     const sparkTd = document.createElement('td');
                     sparkTd.className = 'sparkline-cell';
@@ -646,6 +652,7 @@
                     tr.appendChild(goldTd);
                     tr.appendChild(volumeTd);
                     tr.appendChild(pointsTd);
+                    tr.appendChild(pointsSoldTd);
                     tr.appendChild(sparkTd);
                     tbody.appendChild(tr);
                 });

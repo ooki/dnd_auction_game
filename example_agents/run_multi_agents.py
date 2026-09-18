@@ -20,6 +20,8 @@ def discover_agent_scripts() -> List[Path]:
             continue
         if not p.name.endswith(".py"):
             continue
+        if p.name == "agent_print_info.py":
+            continue
         if p.name == Path(__file__).name:
             continue
         scripts.append(p)

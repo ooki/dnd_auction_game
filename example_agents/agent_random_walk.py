@@ -1,3 +1,4 @@
+import math
 import random
 import os
 
@@ -7,7 +8,9 @@ from dnd_auction_game import AuctionGameClient
 ############################################################################################
 #
 # random_walk 
-#   Walks up if we won the auction, otherwise walk down
+#   Walks up if we won the auction, otherwise walk down.
+#   When it cannot afford its current bid, it sells enough points to cover the
+#   shortfall for a future round at the currently displayed exchange rate.
 #
 ############################################################################################
     
@@ -29,6 +32,14 @@ class RandomWalkAgent:
 
         agent_state = states[agent_id]
         current_gold = agent_state["gold"]
+
+        # Point-sale gold arrives next round, so this cannot rescue this bid;
+        # it only naively replenishes gold for a later round.
+        points_to_spend = 0
+        if current_gold < self.current_bid and gold_per_point > 0:
+            shortfall = self.current_bid - current_gold
+            max_sellable = max(0, agent_state["points"] + 100)
+            points_to_spend = min(max_sellable, math.ceil(shortfall / gold_per_point))
 
         if current_gold < self.current_bid:
             self.current_bid -= random.randint(1, self.max_move_up_or_down)
@@ -62,7 +73,7 @@ class RandomWalkAgent:
             bids[target_auction_id] = self.current_bid
             self.last_bid_auction_id = target_auction_id
 
-        return {"bids": bids, "points_to_spend": 0}
+        return {"bids": bids, "points_to_spend": points_to_spend}
 
 
 

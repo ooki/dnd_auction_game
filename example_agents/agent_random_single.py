@@ -10,6 +10,7 @@ from dnd_auction_game import AuctionGameClient
 # random_all_in
 #   Picks a single auction and bid a random fraction of the agents gold.
 #   Also make sure we never bid more than the max of all the other agents.
+#   Once it exceeds 30 points, it cashes out everything above a 10-point reserve.
 #
 ############################################################################################
     
@@ -23,7 +24,12 @@ def random_single_bid(agent_id: str,
                         bank_state: dict):
 
     agent_state = states[agent_id]
-    
+    # first 20 rounds sell all points ( +5 points per round)
+    if round < 20:
+        points_to_spend = agent_state["points"] + 5
+    else:
+        points_to_spend = 0
+
     # get the gold amount of the wealthiest agent (that is not ourself)
     max_gold = 1
     for a_id, other_agent in states.items():
@@ -43,7 +49,7 @@ def random_single_bid(agent_id: str,
         
         bids[target_auction_id] = bid_amount
 
-    return {"bids": bids, "points_to_spend": 0}
+    return {"bids": bids, "points_to_spend": points_to_spend}
 
 
 
