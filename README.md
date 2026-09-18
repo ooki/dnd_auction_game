@@ -145,7 +145,7 @@ The defaults are meant for local play. If agents connect over a network:
 
   ```bash
   AH_GAME_TOKEN=... AH_PLAY_TOKEN=... AH_LOG_DIR=~/ah_logs \
-  python -m dnd_auction_game.server --host 0.0.0.0 --port 5566 \
+  python -m dnd_auction_game.server --host 0.0.0.0 --port 8022 \
       --ssl-keyfile ~/certs/privkey.pem --ssl-certfile ~/certs/fullchain.pem
   ```
 
@@ -211,7 +211,7 @@ So for local testing keep the example agents as they are, and to play for real c
 
 ```python
 host = "auction.example.org"   # the DNS name the organiser gave you
-port = 5566                    # the port the organiser gave you
+port = 8022                    # the port the organiser gave you
 ```
 
 If you ever need to override the automatic choice (e.g. a plain, non-TLS server on your LAN), pass it explicitly:
