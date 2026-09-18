@@ -116,10 +116,11 @@ def braavos_bank_interest_rate_random_walk(n_steps:int) -> List[float]:
 
 
 class AuctionHouse:
-    def __init__(self, game_token:str, play_token:str, save_logs=False):
+    def __init__(self, game_token:str, play_token:str, save_logs=False, log_dir:str=None):
         self.is_done = False
         self.is_active = False
         
+        self.log_dir = log_dir if log_dir is not None else os.environ.get("AH_LOG_DIR", ".")
         self.log_player_id_file = None
         self.log_file = None
         self.game_token = game_token
@@ -164,22 +165,36 @@ class AuctionHouse:
         # set the logfile
         self._find_log_file()
 
-        print("logging to: '{}'".format(self.log_file))
+        if self.save_logs:
+            print("logging to: '{}'".format(self.log_file))
 
     
     def _find_log_file(self):
-        if self.log_file is None:            
-            i = 1
+        """Pick the next unused log file pair in log_dir (one pair per game)."""
+        if not self.save_logs:
+            self.log_file = None
+            self.log_player_id_file = None
+            return
 
-            f = "./auction_house_log_{}.jsonln".format(i)         
-            f_player_id = "./auction_house_log_player_id_{}.jsonln".format(i)   
-            while os.path.isfile(f):
-                f = "./auction_house_log_{}.jsonln".format(i)
-                f_player_id = "./auction_house_log_player_id_{}.jsonln".format(i)   
-                i += 1
+        try:
+            os.makedirs(self.log_dir, exist_ok=True)
+        except OSError as e:
+            print("error creating log dir '{}': {} - logging disabled".format(self.log_dir, e))
+            self.save_logs = False
+            self.log_file = None
+            self.log_player_id_file = None
+            return
 
-            self.log_file = f
-            self.log_player_id_file = f_player_id
+        i = 1
+        while True:
+            f = os.path.join(self.log_dir, "auction_house_log_{}.jsonln".format(i))
+            f_player_id = os.path.join(self.log_dir, "auction_house_log_player_id_{}.jsonln".format(i))
+            if not os.path.isfile(f) and not os.path.isfile(f_player_id):
+                break
+            i += 1
+
+        self.log_file = f
+        self.log_player_id_file = f_player_id
 
 
 
@@ -246,13 +261,14 @@ class AuctionHouse:
             print("Agent {}  id:{} reconnected".format(name, a_id))
             return True
 
-        try:
-            with open(self.log_player_id_file, 'a') as fp:
-                pid = {"player_id": player_id, "agent_id": a_id, "name": name}
-                fp.write("{}\n".format(json.dumps(pid)))
-        except Exception as e:
-            print("error writing player id log:", e)
-            self.save_logs = False
+        if self.save_logs and self.log_player_id_file is not None:
+            try:
+                with open(self.log_player_id_file, 'a') as fp:
+                    pid = {"player_id": player_id, "agent_id": a_id, "name": name}
+                    fp.write("{}\n".format(json.dumps(pid)))
+            except Exception as e:
+                print("error writing player id log:", e)
+                self.save_logs = False
                     
         self.agents[a_id] = {"gold": 0, "points": 0}
         self.names[a_id] = name
@@ -367,7 +383,10 @@ class AuctionHouse:
         """Register this round's point-to-gold purchase request.
 
         A request replaces any earlier request from the same agent in this round.
-        Settlement occurs at the next tick using the rate visible to the agent.
+        Settlement occurs at the next tick, *after* this round's auctions are
+        resolved, using the rate that was visible to the agent. The request is
+        clamped to the -100 floor at settlement time, so points won in this
+        round's auctions can be sold in the same request.
         """
         if a_id not in self.agents:
             return
@@ -376,11 +395,14 @@ class AuctionHouse:
         if points is None:
             return
 
-        max_spend = max(0, self.agents[a_id]["points"] + 100)
-        self.current_point_purchases[a_id] = min(points, max_spend)
+        self.current_point_purchases[a_id] = points
 
-    def process_point_purchases(self):
-        """Settle requested purchases while enforcing the -100 point floor."""
+    def process_point_purchases(self, gold_per_point: float):
+        """Settle requested purchases at `gold_per_point` while enforcing the -100 point floor.
+
+        Must run after process_all_bids() so the gold cannot be used for bids in
+        the round it was earned, and so freshly won points are sellable.
+        """
         for a_id, requested_points in self.current_point_purchases.items():
             agent = self.agents.get(a_id)
             if agent is None:
@@ -389,7 +411,7 @@ class AuctionHouse:
             points = min(requested_points, max(0, agent["points"] + 100))
             agent["points"] -= points
             # Gold balances and bids are integers, so fractional gold is rounded down.
-            agent["gold"] += int(points * self.gold_per_point)
+            agent["gold"] += int(points * gold_per_point)
 
         self.current_point_purchases = {}
 

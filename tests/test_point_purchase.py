@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from collections import defaultdict
@@ -23,12 +24,7 @@ class ParseIntTests(unittest.TestCase):
 
 class PointPurchaseTests(unittest.TestCase):
     def make_house(self):
-        temp_dir = tempfile.TemporaryDirectory()
-        self.addCleanup(temp_dir.cleanup)
-        with patch("dnd_auction_game.auction_house.os.path.isfile", return_value=False):
-            house = AuctionHouse("game", "play", save_logs=False)
-        house.log_file = str(Path(temp_dir.name) / "auction.jsonl")
-        return house
+        return AuctionHouse("game", "play", save_logs=False)
 
     @staticmethod
     def add_agent(house, agent_id, gold=0, points=0):
@@ -42,7 +38,7 @@ class PointPurchaseTests(unittest.TestCase):
 
         self.assertEqual(house.gold_per_point, 0.0)
         house.register_point_purchase("agent", 500)
-        house.process_point_purchases()
+        house.process_point_purchases(house.gold_per_point)
 
         self.assertEqual(house.agents["agent"]["points"], -100)
         self.assertEqual(house.agents["agent"]["gold"], 0)
@@ -50,12 +46,49 @@ class PointPurchaseTests(unittest.TestCase):
     def test_purchase_uses_published_rate_and_rounds_gold_down(self):
         house = self.make_house()
         self.add_agent(house, "agent", points=10)
-        house.gold_per_point = 2.75
 
         house.register_point_purchase("agent", 3)
-        house.process_point_purchases()
+        house.process_point_purchases(2.75)
 
         self.assertEqual(house.agents["agent"]["points"], 7)
+        self.assertEqual(house.agents["agent"]["gold"], 8)
+
+    def test_points_won_this_round_can_be_sold_but_gold_cannot_fund_same_round_bids(self):
+        house = self.make_house()
+        self.add_agent(house, "agent", gold=100, points=0)
+        house.current_auctions = {"a1": {}}
+        house.current_rolls = {"a1": 30}
+        published_rate = 5.0
+
+        # Agent bids everything and asks to sell 25 points it does not yet have.
+        house.register_bid("agent", "a1", 100)
+        house.register_point_purchase("agent", 25)
+        self.assertEqual(house.agents["agent"]["gold"], 0)
+
+        # A bid placed after the request cannot use the not-yet-settled gold.
+        house.register_bid("agent", "a1", 1)
+        self.assertEqual(len(house.current_bids["a1"]), 1)
+
+        # Server order: bids first, then purchases at the published rate.
+        house.process_all_bids()
+        house.process_point_purchases(published_rate)
+
+        self.assertEqual(house.agents["agent"]["points"], 5)      # 30 won - 25 sold
+        self.assertEqual(house.agents["agent"]["gold"], 125)      # 25 * 5.0
+        self.assertNotEqual(house.gold_per_point, published_rate)  # next round's rate differs
+
+    def test_sale_is_clamped_to_floor_after_auction_results(self):
+        house = self.make_house()
+        self.add_agent(house, "agent", gold=10, points=-100)
+        house.current_auctions = {"a1": {}}
+        house.current_rolls = {"a1": 4}
+
+        house.register_bid("agent", "a1", 10)
+        house.register_point_purchase("agent", 1000)
+        house.process_all_bids()
+        house.process_point_purchases(2.0)
+
+        self.assertEqual(house.agents["agent"]["points"], -100)  # -96 -> sells 4
         self.assertEqual(house.agents["agent"]["gold"], 8)
 
     def test_rate_uses_winning_gold_and_aggregate_actual_rewards(self):
@@ -130,6 +163,46 @@ class PointPurchaseTests(unittest.TestCase):
         house.process_all_bids()
 
         self.assertEqual(house.gold_per_point, 0.0)
+
+
+class LogFileTests(unittest.TestCase):
+    def setUp(self):
+        temp_dir = tempfile.TemporaryDirectory()
+        self.addCleanup(temp_dir.cleanup)
+        self.log_dir = Path(temp_dir.name) / "nested" / "logs"
+
+    def test_no_files_written_when_logging_disabled(self):
+        house = AuctionHouse("game", "play", save_logs=False, log_dir=str(self.log_dir))
+        house.add_agent("A", "agent1", "pid", "secret-1")
+        house.prepare_auctions()
+
+        self.assertIsNone(house.log_file)
+        self.assertIsNone(house.log_player_id_file)
+        self.assertFalse(self.log_dir.exists())
+
+    def test_logs_written_to_log_dir_and_new_pair_per_game(self):
+        house = AuctionHouse("game", "play", save_logs=True, log_dir=str(self.log_dir))
+        house.add_agent("A", "agent1", "human-42", "secret-1")
+        house.prepare_auctions()
+
+        self.assertEqual(sorted(p.name for p in self.log_dir.iterdir()),
+                         ["auction_house_log_1.jsonln", "auction_house_log_player_id_1.jsonln"])
+        pid_row = json.loads((self.log_dir / "auction_house_log_player_id_1.jsonln").read_text())
+        self.assertEqual(pid_row, {"player_id": "human-42", "agent_id": "agent1", "name": "A"})
+        self.assertNotIn("human-42", (self.log_dir / "auction_house_log_1.jsonln").read_text())
+
+        house.reset()
+        house.add_agent("B", "agent2", "human-43", "secret-2")
+        house.prepare_auctions()
+        self.assertTrue((self.log_dir / "auction_house_log_2.jsonln").is_file())
+        self.assertTrue((self.log_dir / "auction_house_log_player_id_2.jsonln").is_file())
+        self.assertNotIn("human-43", (self.log_dir / "auction_house_log_player_id_1.jsonln").read_text())
+
+    def test_log_dir_from_environment(self):
+        with patch.dict("os.environ", {"AH_LOG_DIR": str(self.log_dir)}):
+            house = AuctionHouse("game", "play", save_logs=True)
+        self.assertEqual(Path(house.log_file).parent, self.log_dir)
+        self.assertTrue(self.log_dir.is_dir())
 
 
 if __name__ == "__main__":

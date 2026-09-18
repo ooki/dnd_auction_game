@@ -1,6 +1,7 @@
 import asyncio
 import json
 import socket
+import tempfile
 import threading
 import time
 import unittest
@@ -11,7 +12,8 @@ import websockets
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-with patch("dnd_auction_game.auction_house.os.path.isfile", return_value=False):
+_LOG_DIR = tempfile.TemporaryDirectory()
+with patch.dict("os.environ", {"AH_LOG_DIR": _LOG_DIR.name}):
     from dnd_auction_game import server
 
 

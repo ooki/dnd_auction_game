@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dnd_auction_game"
-version = "0.4.1"
+version = "0.5.0"
 description = "An auction game for trading-bots based on d&d die rolls."
 readme = "README.md"
 requires-python = ">=3.8"

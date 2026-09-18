@@ -209,15 +209,20 @@ def _compute_leadboard_state():
     }
 
 async def _process_round():
-    try:
-        auction_house.process_point_purchases()
-    except Exception as e:
-        print("error in process_point_purchases:", e)
+    # Rate the agents saw when they submitted this round's requests.
+    published_rate = auction_house.gold_per_point
 
+    # Resolve auctions first, then settle point sales: gold from a sale can
+    # never fund bids in the same round, but points won this round can be sold.
     try:
         auction_house.process_all_bids()
     except Exception as e:
         print("error in process_all_bids:", e)
+
+    try:
+        auction_house.process_point_purchases(published_rate)
+    except Exception as e:
+        print("error in process_point_purchases:", e)
 
     round_data = None
     try:
@@ -381,10 +386,8 @@ async def websocket_endpoint_client(websocket: WebSocket, token: str):
 @app.websocket("/ws_run/{play_token}")
 async def websocket_endpoint_runner(websocket: WebSocket, play_token: str):
     
-    print("websocket_endpoint_runner - PLAY TOKEN:", play_token)
-
     if play_token != auction_house.play_token:
-        print("wrong play token")
+        print("ws_run: rejected request with wrong play token")
         await websocket.close(code=1008)
         return
     
@@ -430,8 +433,8 @@ async def websocket_endpoint_runner(websocket: WebSocket, play_token: str):
 
 @app.post("/reset/{play_token}")
 async def reset_server(play_token: str):
-    print("reset_server - PLAY TOKEN:", play_token)
     if play_token != auction_house.play_token:
+        print("reset: rejected request with wrong play token")
         return {"ok": False, "error": "wrong play token"}
 
     async with _state_lock:

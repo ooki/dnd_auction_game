@@ -8,6 +8,8 @@ The server awards each auction to the highest bidder. In case of a tie, priority
 
 If you don't win an auction, you get back 50% of the gold you bid; the other 50% is removed from the game. Players may also spend points to buy gold at the current gold-per-point rate. This rate is calculated from the previous round as total winning-bid gold divided by `max(1, total actual points awarded to winners)`. The first round's rate is 0 gold per point. A player may spend points down to, but never below, -100 points.
 
+Order of settlement each round: the auctions are resolved first, then point sales are settled at the rate that was shown to you. This means the gold you get from selling points is only available for bidding from the *next* round, but points you win in this round's auctions can already be sold in the same request (the -100 floor is applied after the auction results).
+
 In addition, the Iron Bank of Braavos pays interest on your gold holdings (up to a limit). The interest rate, bank limit, and gold income all vary each round via random walks—use `bank_state` to see future values and plan ahead.
 
 To pass, according to Gandalf, you must obtain at least 10 points.
@@ -21,6 +23,11 @@ stochastic.
 
 To install, run:
 pip install dnd_auction_game
+
+**Upgrading to 0.5.0 (breaking):** agents built on `dnd_auction_game < 0.5.0` can no longer connect.
+Agents now send a per-agent `secret` (derived from the machine id) alongside their `a_id`, and the
+server uses it to verify reconnects so nobody can bid as someone else. Just `pip install -U dnd_auction_game`
+on every machine running an agent - no code changes are needed in your agent.
 
 # Flow
 
@@ -37,6 +44,43 @@ A game is done in the following order:
 
 To run the server, use: 'uvicorn dnd_auction_game.server:app' in the directory root directory.
 Ctrl+C to stop it cleanly.
+
+The server is configured with environment variables:
+
+| Variable         | Default   | Meaning |
+|------------------|-----------|---------|
+| `AH_GAME_TOKEN`  | `play123` | Token agents use to connect (`/ws/{token}`). |
+| `AH_PLAY_TOKEN`  | `play123` | Admin token for starting (`/ws_run/{token}`) and resetting (`POST /reset/{token}`) a game. |
+| `AH_MAX_AGENTS`  | `200`     | Maximum number of distinct agents in one game. Reconnects of existing agents are always allowed. |
+| `AH_MAX_ROUNDS`  | `10000`   | Upper bound for `num_rounds` requested by the game runner. |
+| `AH_LOG_DIR`     | `.`       | Directory for the server-side game logs (created if missing). |
+
+Notes:
+
+- The runner refuses to start a game while one is already running; reset the server first.
+- New agents cannot join after the game has started; existing agents may reconnect at any time.
+- If an agent reconnects while its previous connection is still open, the old connection is closed.
+
+## Server logs
+
+Each game writes two files to `AH_LOG_DIR`, numbered so nothing is overwritten:
+
+- `auction_house_log_N.jsonln` - one JSON line per round with the full public state (the same data agents receive).
+- `auction_house_log_player_id_N.jsonln` - one JSON line per agent mapping `player_id` -> `agent_id` / `name`.
+  `player_id` is stored in plaintext and is never sent to other agents; treat this file as private.
+
+## Running the server for others (not on localhost)
+
+The defaults are meant for local play. If agents connect over a network:
+
+- Set `AH_GAME_TOKEN` and `AH_PLAY_TOKEN` to two different, unguessable values. Anyone with the play token can start
+  and reset games; anyone with the game token can join.
+- Tokens travel in the URL path, so put the server behind TLS (a reverse proxy such as nginx or Caddy terminating
+  `https://`/`wss://`), and point agents at `wss://`.
+- Limit the size of incoming websocket messages, e.g. `uvicorn dnd_auction_game.server:app --ws-max-size 65536`
+  (the default is 16 MiB). A bid message is a few hundred bytes.
+- Lower `AH_MAX_AGENTS` to the number of players you expect.
+- Set `AH_LOG_DIR` to a directory that is not world-readable, since the player-id log is written there.
 
 # Agents (players)
 
@@ -165,9 +209,7 @@ If you want to start a fresh game without restarting uvicorn, you can reset the 
   - `python -m dnd_auction_game.reset mytoken`  (host=localhost, port=8000)
   - `python -m dnd_auction_game.reset mytoken 10.0.0.5 9000`
 
-Environment variable:
-
-- `AH_PLAY_TOKEN` — server-side env var defining the play token; the CLI will also use this as default if no token is provided.
+The CLI uses `AH_PLAY_TOKEN` as the default token if none is given on the command line (see the Server section).
 
 What reset does:
 
