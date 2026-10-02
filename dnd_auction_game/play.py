@@ -3,8 +3,10 @@ import os
 import random
 import asyncio
 import json
+import ssl
 from typing import Optional
 from websockets.asyncio.client import connect
+from websockets.exceptions import InvalidHandshake
 
 from dnd_auction_game.net import resolve_ssl, ws_scheme
 
@@ -31,21 +33,33 @@ class AuctionGameRunner:
         print("connecting to: {}://{}:{}/ws_run/<play_token>".format(scheme, self.host, self.port))
         
 
-        async with connect(connection_str) as sock:
-            print("<connected - starting game>")
+        try:
+            async with connect(connection_str) as sock:
+                print("<connected - starting game>")
 
-            game_info = {"num_rounds": self.n_rounds}
-            await sock.send(json.dumps(game_info))
+                game_info = {"num_rounds": self.n_rounds}
+                await sock.send(json.dumps(game_info))
 
-            server_info_raw = await sock.recv()
-            server_info = json.loads(server_info_raw)
-            if "error" in server_info:
-                print("<ERROR: server refused to start game: {}>".format(server_info["error"]))
-                return
-            print("<server info: {}>".format(server_info))
-            print("<game started>")
+                server_info_raw = await sock.recv()
+                server_info = json.loads(server_info_raw)
+                if "error" in server_info:
+                    print("<ERROR: server refused to start game: {}>".format(server_info["error"]))
+                    return
+                print("<server info: {}>".format(server_info))
+                print("<game started>")
+        except InvalidHandshake as e:
+            transport = "TLS (wss://)" if self.use_ssl else "plain WebSocket (ws://)"
+            print("<ERROR: websocket handshake failed: {}. Connected using {}; check the host, port, "
+                  "and whether that endpoint expects ws:// or wss://.>".format(e, transport))
+            return
+        except ssl.SSLError as e:
+            print("<ERROR: TLS handshake failed: {}. Check that the server certificate matches {} "
+                  "and that the endpoint serves wss://.>".format(e, self.host))
+            return
+        except OSError as e:
+            print("<ERROR: could not reach server at {}:{} ({})>".format(self.host, self.port, e))
+            return
 
-    
         print("<done>")
             
         
@@ -53,6 +67,9 @@ def main():
     # usage: python -m dnd_auction_game.play [N_ROUNDS] [PLAY_TOKEN] [HOST] [PORT] [--ssl|--no-ssl]
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     flags = {a for a in sys.argv[1:] if a.startswith("--")}
+    if "--ssl" in flags and "--no-ssl" in flags:
+        print("<ERROR: use only one of --ssl or --no-ssl>")
+        sys.exit(2)
     use_ssl = True if "--ssl" in flags else False if "--no-ssl" in flags else None
 
     n_rounds = int(args[0]) if len(args) >= 1 else 12

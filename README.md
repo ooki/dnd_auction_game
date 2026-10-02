@@ -155,7 +155,8 @@ The defaults are meant for local play. If agents connect over a network:
   or put it behind a reverse proxy (nginx/Caddy) that terminates `https://`/`wss://`. The certificate must be issued
   for the DNS name that agents will use as `host` (an IP address will fail certificate verification).
 - Agents, the runner and the reset CLI pick `wss://`/`https://` automatically for any host other than
-  `localhost`/`127.0.0.1`, so students only need to change `host` and `port` (see below).
+  `localhost`/`127.0.0.1`, so students only need to change `host` and `port` (see below). Do not use
+  `localhost` when reaching the TLS deployment: the TLS certificate is issued for the public DNS name.
 - `--ws-max-size 65536` limits incoming websocket messages (default 16 MiB). A bid message is a few hundred bytes.
 - Lower `AH_MAX_AGENTS` to the number of players you expect.
 - Set `AH_LOG_DIR` to a directory that is not world-readable, since the player-id log is written there.
@@ -221,6 +222,25 @@ game = AuctionGameClient(host=host, agent_name=agent_name, player_id=player_id, 
 ```
 
 The runner and reset CLIs accept the same override as flags: `--ssl` / `--no-ssl`.
+
+### Starting a game on the TLS deployment
+
+Run the runner against the **public DNS name and public TLS port**, not `localhost:8000` on the
+server. With the deployment example above:
+
+```bash
+python -m dnd_auction_game.play 1000 "$AH_PLAY_TOKEN" auction.example.org 8022 --ssl
+```
+
+`--ssl` is explicit here (and is selected automatically for a non-local host). Make sure
+`AH_PLAY_TOKEN` is set in the shell running the command. If the server is behind nginx or Caddy,
+use the proxy's externally exposed port rather than Uvicorn's private upstream port.
+
+To reset that same deployment:
+
+```bash
+python -m dnd_auction_game.reset "$AH_PLAY_TOKEN" auction.example.org 8022 --ssl
+```
 
 ## Implementing Your Agent
 
